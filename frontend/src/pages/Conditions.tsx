@@ -2,18 +2,19 @@ import * as React from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState, type VisibilityState } from "@tanstack/react-table";
-import { LayoutGrid, Table2, Gauge, Download, Search, ArrowUpDown, Columns3, Handshake, Sparkles, Info, Check, ShieldCheck } from "lucide-react";
+import { ScatterChart as ScatterIcon, FlaskConical, LayoutGrid, Table2, Gauge, Download, Search, ArrowUpDown, Columns3, Handshake, Sparkles, Info, Check, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAiAction } from "@/components/AiAction";
+import { PositioningView, WhatIfView } from "@/components/InsightViews";
 import { FindingStatus, ProviderLogo, SourceRef, VerifiedMark, useDebounced } from "@/components/common";
 import { FindingEditor } from "@/components/FindingEditor";
 import { useProducts } from "@/components/forms";
 import { Dialog, Menu } from "@/components/ui/overlay";
 import { Badge, Button, Card, EmptyState, Input, Loading, Notice, PageHeader, Segmented, Select, Switch, Tip } from "@/components/ui/primitives";
 
-type View = "kaarten" | "tabel" | "scores";
+type View = "kaarten" | "tabel" | "scores" | "positionering" | "watals";
 
 export default function Conditions() {
   const [params, setParams] = useSearchParams();
@@ -36,20 +37,22 @@ export default function Conditions() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader module="voorwaarden"
         title="Voorwaardenvergelijker"
         subtitle="Vergelijk polisvoorwaarden per kenmerk, met bronverwijzing naar document, pagina en artikel."
         actions={<Segmented value={view} onChange={(v) => { setView(v); setParams((p) => { p.set("view", v); return p; }); }} options={[
           { value: "kaarten", label: <><LayoutGrid className="h-3.5 w-3.5" /> Kaarten</> },
           { value: "tabel", label: <><Table2 className="h-3.5 w-3.5" /> Tabel</> },
           { value: "scores", label: <><Gauge className="h-3.5 w-3.5" /> Scores</> },
+          { value: "positionering", label: <><ScatterIcon className="h-3.5 w-3.5" /> Positionering</> },
+          { value: "watals", label: <><FlaskConical className="h-3.5 w-3.5" /> Wat als</> },
         ]} />}
       />
       {all.isLoading ? <Loading /> : !all.data?.length ? (
         <Card><EmptyState icon={<Columns3 />} title="Nog geen producten" description="Voeg bij Concurrenten het Vetera-product en de concurrentieproducten toe; leg daarna bevindingen vast of laat ze uit documenten afleiden." /></Card>
       ) : (
         <>
-          <Card className="mb-6 p-4">
+          <Card className={cn("mb-6 p-4", (view === "positionering" || view === "watals") && "hidden")}>
             <div className="flex flex-wrap items-center gap-2">
               <span className="mr-1 text-[12.5px] font-medium text-ink-muted">Producten</span>
               {all.data.map((p) => (
@@ -69,7 +72,8 @@ export default function Conditions() {
               {!all.data.some((p) => p.is_reference) && <span className="text-[12px] text-caution">Leg eerst het Vetera-product vast om als referentie te gebruiken.</span>}
             </div>
           </Card>
-          {selected.length === 0 ? <Card><EmptyState title="Selecteer producten" /></Card> :
+          {view === "positionering" ? <PositioningView /> : view === "watals" ? <WhatIfView products={all.data} /> :
+            selected.length === 0 ? <Card><EmptyState title="Selecteer producten" /></Card> :
             view === "tabel" ? <MatrixView ids={selected} reference={reference} products={all.data} /> :
             view === "kaarten" ? <CardsView ids={selected} reference={reference} /> : <ScoresView ids={selected} />}
         </>
@@ -80,12 +84,18 @@ export default function Conditions() {
 
 /* ------------------------------------------------------------------ Tabel */
 const ch = createColumnHelper<any>();
+// Zachte achtergrondtint per status: de matrix leest als heatmap, de badge blijft de primaire codering.
+const STATUS_TINT: Record<string, string> = {
+  gedekt: "bg-[#eaf6ee]", uitgesloten: "bg-[#fcefed]", voorwaardelijk: "bg-[#fdf5e6]",
+  aanvullende_clausule: "bg-[#ecf3fc]", menselijke_beoordeling: "bg-[#f5f2ff]",
+};
 
 function MatrixView({ ids, reference, products }: { ids: number[]; reference: number | null; products: any[] }) {
   const [category, setCategory] = React.useState("");
   const [onlyDiff, setOnlyDiff] = React.useState(false);
   const [onlyUnknown, setOnlyUnknown] = React.useState(false);
-  const [q, setQ] = React.useState("");
+  const [urlParams] = useSearchParams();
+  const [q, setQ] = React.useState(urlParams.get("q") || "");
   const dq = useDebounced(q);
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [visibility, setVisibility] = React.useState<VisibilityState>({ rubriek: false });
@@ -107,7 +117,7 @@ function MatrixView({ ids, reference, products }: { ids: number[]; reference: nu
         id: `p${p.id}`,
         header: () => (
           <div className="flex items-center gap-2">
-            <ProviderLogo name={p.provider_name} logoUrl={p.logo} size={22} />
+            <ProviderLogo name={p.provider_name} logoUrl={p.logo} size={22} id={p.provider_id} isReference={p.is_reference} />
             <div className="min-w-0 leading-tight">
               <div className="truncate text-[12.5px] font-semibold text-ink">{p.provider_name}</div>
               <div className="truncate text-[11px] font-normal text-ink-muted">{p.name}</div>
@@ -121,7 +131,7 @@ function MatrixView({ ids, reference, products }: { ids: number[]; reference: nu
           const cell = r.cells[String(p.id)];
           const diff = r.differences[String(p.id)];
           return (
-            <button onClick={() => setEdit({ product: prodMap[p.id] || p, feature: r.feature, finding: cell })} className="block w-full rounded-lg p-1.5 -m-1.5 text-left transition-colors hover:bg-surface">
+            <button onClick={() => setEdit({ product: prodMap[p.id] || p, feature: r.feature, finding: cell })} className={cn("block w-full rounded-[10px] p-2 -m-1 text-left transition-all hover:brightness-[0.97] hover:shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]", STATUS_TINT[cell?.status] || "hover:bg-surface")}>
               <div className="flex items-center gap-1.5"><FindingStatus status={cell?.status} compact /><VerifiedMark verified={cell?.quote_verified} />{cell && cell.review_status === "te_beoordelen" && cell.origin !== "handmatig" && <Tip content="Nog niet door een mens gecontroleerd"><span className="h-1.5 w-1.5 rounded-full bg-[#5b3fb5]" /></Tip>}</div>
               {cell?.value_text && <div className="mt-1 line-clamp-2 text-[12px] text-ink-soft">{cell.value_text}</div>}
               {cell?.document_version_id && <div className="mt-0.5"><SourceRef versionId={cell.document_version_id} page={cell.page_number} article={cell.article} quote={cell.quote} className="-ml-1.5" /></div>}
@@ -211,7 +221,7 @@ function CardsView({ ids, reference }: { ids: number[]; reference: number | null
         {data?.map((p) => (
           <Card key={p.id} className="flex flex-col p-6">
             <div className="flex items-start justify-between gap-3">
-              <ProviderLogo name={p.provider_name} logoUrl={p.logo} size={40} />
+              <ProviderLogo name={p.provider_name} logoUrl={p.logo} size={40} id={p.provider_id} isReference={p.is_reference} />
               <Badge tone={p.data_status === "goed" ? "positive" : p.data_status === "gedeeltelijk" ? "caution" : "neutral"}>
                 {p.features_known}/{p.features_total} kenmerken · {p.features_verified} gecontroleerd
               </Badge>

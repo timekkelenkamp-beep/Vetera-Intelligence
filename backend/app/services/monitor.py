@@ -268,6 +268,16 @@ def run_monitor(db: Session, trigger: str = "handmatig", source_ids: list[int] |
     if not source_ids:
         set_setting(db, "monitor_last_run_at", run.finished_at.isoformat())
     db.commit()
+    if not source_ids and run.status == "voltooid":
+        try:
+            from .reports import generate
+            rep = generate(db, "marktbericht", {})
+            notify(db, "systeem", rep.title, "Het marktbericht van deze broncontrole staat klaar.",
+                   f"/rapportages/{rep.id}")
+            db.commit()
+        except Exception:  # pragma: no cover - een rapport mag de controle niet laten mislukken
+            log.exception("Marktbericht opstellen mislukt")
+            db.rollback()
     return run
 
 

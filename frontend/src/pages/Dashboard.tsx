@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { cn, pct, relative } from "@/lib/utils";
 import { NOTIF_TYPE } from "@/lib/labels";
+import { MODULES } from "@/lib/modules";
 import { Badge, Button, Card, CardHeader, EmptyState, Loading, Notice, Stat } from "@/components/ui/primitives";
 
 const EXAMPLES = [
@@ -46,7 +47,8 @@ export default function Dashboard() {
 
   return (
     <div>
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-6 pb-10 text-center">
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="relative isolate pt-6 pb-10 text-center">
+        <div aria-hidden className="pointer-events-none absolute -inset-x-10 -top-16 bottom-0 -z-10 opacity-90" style={{ background: "radial-gradient(38% 55% at 28% 35%, rgba(31,111,95,0.16), transparent 70%), radial-gradient(32% 50% at 72% 25%, rgba(10,124,255,0.11), transparent 70%), radial-gradient(28% 40% at 55% 78%, rgba(240,138,0,0.09), transparent 70%), radial-gradient(25% 35% at 85% 70%, rgba(161,79,214,0.08), transparent 70%)" }} />
         <h1 className="text-[44px] font-semibold tracking-tightest text-ink leading-none">Vetera Intelligence</h1>
         <p className="mt-3 text-[16px] text-ink-muted">Concurrentie-inzicht voor klassieke auto's, motorfietsen en bromfietsen</p>
         <form
@@ -56,7 +58,7 @@ export default function Dashboard() {
           }}
           className="mx-auto mt-9 max-w-2xl"
         >
-          <div className="group relative flex items-center rounded-2xl border border-line-strong bg-white shadow-soft transition-shadow focus-within:shadow-lift focus-within:border-accent/40">
+          <div className="group relative flex items-center rounded-2xl border border-line-strong bg-white/90 backdrop-blur shadow-lift transition-shadow focus-within:shadow-lift focus-within:border-accent/40">
             <Search className="ml-5 h-5 w-5 text-ink-faint" />
             <input
               value={q}
@@ -72,7 +74,7 @@ export default function Dashboard() {
         </form>
         <div className="mx-auto mt-4 flex max-w-3xl flex-wrap justify-center gap-2">
           {EXAMPLES.map((e) => (
-            <button key={e} onClick={() => submit(e)} className="rounded-full border border-line bg-white px-3 py-1.5 text-[12.5px] text-ink-soft transition-colors hover:border-line-strong hover:text-ink">
+            <button key={e} onClick={() => submit(e)} className="rounded-full border border-line bg-white/80 backdrop-blur px-3 py-1.5 text-[12.5px] text-ink-soft transition-colors hover:border-line-strong hover:text-ink">
               {e}
             </button>
           ))}
@@ -95,7 +97,7 @@ export default function Dashboard() {
             <div className="max-w-md">
               <h2 className="text-[17px] font-semibold">Aan de slag</h2>
               <p className="mt-1 text-[13px] text-ink-muted leading-relaxed">
-                Deze installatie bevat nog geen concurrentiegegevens. Er worden bewust geen voorbeeldpremies of fictieve voorwaarden getoond: alles wat je hier ziet komt uit je eigen, herleidbare bronnen.
+                {obDone === 0 ? "Deze installatie bevat nog geen concurrentiegegevens. " : "Nog een paar stappen om het platform compleet te maken. "}Er worden bewust geen voorbeeldpremies of fictieve voorwaarden getoond: alles wat je hier ziet komt uit je eigen, herleidbare bronnen.
               </p>
               <div className="mt-4 h-1.5 w-56 rounded-full bg-surface overflow-hidden">
                 <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(obDone / obSteps.length) * 100}%` }} />
@@ -118,14 +120,14 @@ export default function Dashboard() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Onderzochte concurrenten" value={c.competitors} icon={<Building2 />} hint={c.providers_to_review ? `${c.providers_to_review} te beoordelen` : "actieve aanbieders"} onClick={() => nav("/concurrenten")} />
-        <Stat label="Verzekeringsproducten" value={c.products} icon={<Package />} hint="zonder dubbele distributie" onClick={() => nav("/voorwaarden")} />
-        <Stat label="Gecontroleerde polisdocumenten" value={c.documents} icon={<FileCheck2 />} hint="verwerkte documentversies" onClick={() => nav("/bronnen")} />
-        <Stat label="Marktontwikkelingen" value={c.developments_30d} icon={<Activity />} hint="documentwijzigingen, 30 dagen" onClick={() => nav("/marktmonitor")} />
-        <Stat label="Premiewaarnemingen" value={c.premiums} icon={<TrendingUp />} hint={`${data.premium_differences.length} recente verschillen t.o.v. Vetera`} onClick={() => nav("/premielab")} />
-        <Stat label="Nieuwe verbetersuggesties" value={c.suggestions_new} icon={<Lightbulb />} hint="in de Verbeterradar" onClick={() => nav("/verbeterradar")} />
-        <Stat label="Lopende onderzoeken" value={c.research_ongoing} icon={<FlaskConical />} hint="onderzoeken · interessant · uitwerken" onClick={() => nav("/verbeterradar")} />
-        <Stat label="Nieuwe meldingen" value={c.notifications_new} icon={<Bell />} hint={data.monitor.last_run_at ? `laatste controle ${relative(data.monitor.last_run_at)}` : "nog geen broncontrole"} onClick={() => nav("/marktmonitor")} />
+        <Stat color={MODULES.concurrenten.color} label="Onderzochte concurrenten" value={c.competitors} icon={<Building2 />} hint={c.providers_to_review ? `${c.providers_to_review} te beoordelen` : "actieve aanbieders"} onClick={() => nav("/concurrenten")} />
+        <Stat color={MODULES.voorwaarden.color} label="Verzekeringsproducten" value={c.products} icon={<Package />} hint="zonder dubbele distributie" onClick={() => nav("/voorwaarden")} />
+        <Stat color={MODULES.bronnen.color} label="Gecontroleerde polisdocumenten" value={c.documents} icon={<FileCheck2 />} hint="verwerkte documentversies" onClick={() => nav("/bronnen")} />
+        <Stat color={MODULES.marktmonitor.color} label="Marktontwikkelingen" value={c.developments_30d} icon={<Activity />} hint="documentwijzigingen, 30 dagen" onClick={() => nav("/marktmonitor")} />
+        <Stat color={MODULES.premielab.color} label="Premiewaarnemingen" value={c.premiums} icon={<TrendingUp />} hint={`${data.premium_differences.length} recente verschillen t.o.v. Vetera`} onClick={() => nav("/premielab")} />
+        <Stat color={MODULES.verbeterradar.color} label="Nieuwe verbetersuggesties" value={c.suggestions_new} icon={<Lightbulb />} hint="in de Verbeterradar" onClick={() => nav("/verbeterradar")} />
+        <Stat color={MODULES.rapportages.color} label="Lopende onderzoeken" value={c.research_ongoing} icon={<FlaskConical />} hint="onderzoeken · interessant · uitwerken" onClick={() => nav("/verbeterradar")} />
+        <Stat color={MODULES.dashboard.color} label="Nieuwe meldingen" value={c.notifications_new} icon={<Bell />} hint={data.monitor.last_run_at ? `laatste controle ${relative(data.monitor.last_run_at)}` : "nog geen broncontrole"} onClick={() => nav("/marktmonitor")} />
       </div>
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">

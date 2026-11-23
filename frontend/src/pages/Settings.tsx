@@ -23,7 +23,7 @@ export default function SettingsPage() {
   if (!s) return <Loading />;
   return (
     <div>
-      <PageHeader title="Instellingen" subtitle="Alle gegevens staan lokaal op deze computer. Externe verbindingen worden alleen gemaakt voor functies die dat nodig hebben." />
+      <PageHeader module="instellingen" title="Instellingen" subtitle="Alle gegevens staan lokaal op deze computer. Externe verbindingen worden alleen gemaakt voor functies die dat nodig hebben." />
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })} tabs={[{ value: "ai", label: "AI" }, { value: "rubrieken", label: "Vergelijkingsrubrieken" }, { value: "monitor", label: "Monitor & premies" }, { value: "data", label: "Data & back-up" }, { value: "audit", label: "Audittrail" }, { value: "systeem", label: "Systeem" }]}>
         <TabPanel value="ai"><AiSettings s={s} save={save} /></TabPanel>
         <TabPanel value="rubrieken"><Features /></TabPanel>

@@ -59,3 +59,29 @@ test("AI-actie toont eerst wat er verstuurd wordt", async ({ page }) => {
   await expect(dialog.getByText("AI is niet beschikbaar")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Versturen en analyseren" })).toBeDisabled();
 });
+
+test("snelzoeken met Ctrl+K en adviestool", async ({ page }) => {
+  await page.goto("/");
+  await page.keyboard.press("Control+k");
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Zoeken").fill("E2E Test");
+  await expect(dialog.getByText("E2E Testverzekeraar").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.goto("/advies");
+  await expect(page.getByRole("heading", { name: "Adviestool" })).toBeVisible();
+  await page.getByRole("button", { name: "Rally's en evenementen" }).click();
+  await expect(page.getByText("Vragen om de klant te stellen")).toBeVisible();
+  await expect(page.getByText("Gaat het om toertochten/regelmatigheidsritten")).toBeVisible();
+});
+
+test("positionering, wat-als en marktbericht tonen lege toestanden zonder fouten", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/voorwaarden?view=positionering");
+  await expect(page.getByText(/Nog geen producten te plaatsen|Geplaatst/).first()).toBeVisible();
+  await page.goto("/voorwaarden?view=watals");
+  await expect(page.getByText("Hypothetisch scenario")).toBeVisible();
+  await page.goto("/marktmonitor");
+  await expect(page.getByText("Eerdere marktberichten")).toBeVisible();
+  expect(errors).toEqual([]);
+});

@@ -59,14 +59,17 @@ onboarding:
 | Module | Wat het doet |
 |---|---|
 | **Dashboard** | AI-onderzoeksvraag, kerncijfers uit de database, onboarding, gemiste-controle-melding |
-| **Concurrenten** | Zoeken, filteren, sorteren; toevoegen, bewerken, samenvoegen, verwijderen; status *Te beoordelen*; distributie- vs. canonieke producten; risicodragers; logobeheer met goedkeuring |
-| **Voorwaardenvergelijker** | Kaarten, matrix (TanStack Table) en scores; referentie Vetera; filters op rubriek, alleen verschillen, alleen onbekend, zoeken op clausule; uitleg per verschil; bron openen; export Excel/PDF; verkoopargumenten |
+| **Concurrenten** | Zoeken, filteren, sorteren; toevoegen, bewerken, samenvoegen, verwijderen; status *Te beoordelen*; distributie- vs. canonieke producten; risicodragers; logobeheer met goedkeuring; **concurrentiekaart** (afdrukbaar) en **tijdlijn** per aanbieder |
+| **Voorwaardenvergelijker** | Kaarten, matrix als heatmap en scores; referentie Vetera; filters, zoeken op clausule; uitleg per verschil; bron openen; export Excel/PDF; verkoopargumenten; **positioneringskaart** (premie × voorwaarden) en **wat-als-simulator** |
+| **Adviestool** | Een paar vragen over de klant → welke producten aantoonbaar passen en waarom, met bronnen en gespreksvragen |
 | **Premielab** | Rekenprofielen, premiewaarnemingen (6 typen), vergelijkbaarheidscontroles, grafieken, historie per gelijkwaardige reeks, uitsplitsing, Excel Import Studio, proefberekeningen (toestemmingsregister + handmatige workflow) |
-| **Marktmonitor** | Broncontrole met robots.txt, conditionele verzoeken en vertraging; documentversies en wijzigingsclassificatie; meldingen (markeren/archiveren/filteren); controlehistorie |
+| **Marktmonitor** | **Marktbericht** na elke controle; broncontrole met robots.txt, conditionele verzoeken en vertraging; documentversies en wijzigingsclassificatie; meldingen (markeren/archiveren/filteren); controlehistorie |
 | **Verbeterradar** | Datagedreven signalen zonder AI, AI-voorstellen en innovatiehypotheses, 14-veldenstructuur, werkproces Nieuw → Afgerond/Afgewezen, *Onderzoek verder*-dossiers |
 | **Rapportages** | 7 rapporttypen als PDF, Excel en printweergave, met managementsamenvatting, bronnen en beperkingen |
 | **Bronnen & documenten** | Bronregister, documentbibliotheek met versies, full-text zoeken, PDF-viewer met gemarkeerde passage, datakwaliteit, beoordeling van AI-bevindingen |
 | **Instellingen** | AI (model, effort, budgetten, privacy, webonderzoek, gebruik), rubrieken, monitor, back-up/herstel, verwijderen, audittrail |
+
+Overal in de app: **Ctrl+K** (Mac: ⌘K) opent snelzoeken over aanbieders, producten, documenten, clausules en de volledige tekst van polisvoorwaarden.
 
 Zie [`docs/FUNCTIONALITEITEN.md`](docs/FUNCTIONALITEITEN.md) voor het volledige overzicht, de testdekking en
 de bekende beperkingen.

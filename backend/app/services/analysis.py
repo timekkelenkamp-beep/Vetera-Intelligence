@@ -173,23 +173,33 @@ def product_summary(db: Session, product: Product, reference: Product | None) ->
 
 
 # ---------------------------------------------------------------- scores
-def compute_scores(db: Session, score_profile: ScoreProfile, product_ids: list[int]) -> dict:
+def compute_scores(db: Session, score_profile: ScoreProfile, product_ids: list[int],
+                   overrides: dict[tuple[int, int], str] | None = None,
+                   premium_overrides: dict[int, float] | None = None) -> dict:
+    """Bereken scores. ``overrides`` en ``premium_overrides`` maken een hypothetisch scenario
+    (wat-als) mogelijk zonder iets op te slaan."""
     weights = {k: float(v) for k, v in (score_profile.weights or {}).items() if float(v) > 0}
     features = db.scalars(select(Feature).where(Feature.active.is_(True))).all()
-    fmap = current_findings(db, product_ids)
-    premium_info = {}
+    fmap = dict(current_findings(db, product_ids))
+    for (pid, fid), status in (overrides or {}).items():
+        fmap[(pid, fid)] = Finding(product_id=pid, feature_id=fid, status=status, review_status="hypothetisch")
+    premium_info: dict[int, dict] = {}
     if score_profile.reference_profile_id and "premie" in weights:
         comp = compare_profile(db, score_profile.reference_profile_id)
-        totals = [r["total_annual_cost"] for r in comp["rows"] if r["total_annual_cost"]]
-        lo = min(totals) if totals else None
         for r in comp["rows"]:
-            if r["product_id"] and r["total_annual_cost"] and lo:
+            if r["product_id"] and r["total_annual_cost"]:
                 prev = premium_info.get(r["product_id"])
                 if prev is None or r["total_annual_cost"] < prev["total"]:
                     premium_info[r["product_id"]] = {"total": r["total_annual_cost"],
-                                                     "score": round(lo / r["total_annual_cost"], 3),
                                                      "comparable": r["fully_comparable"] or r["is_baseline"],
                                                      "issues": r["comparability_issues"]}
+        for pid, total in (premium_overrides or {}).items():
+            base = premium_info.get(pid, {"comparable": True, "issues": []})
+            premium_info[pid] = {**base, "total": float(total), "hypothetical": True}
+        totals = [v["total"] for v in premium_info.values() if v["total"]]
+        lo = min(totals) if totals else None
+        for v in premium_info.values():
+            v["score"] = round(lo / v["total"], 3) if lo and v["total"] else None
     results = []
     for pid in product_ids:
         p = db.get(Product, pid)

@@ -1,3 +1,4 @@
+import * as React from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { Sidebar } from "./components/Sidebar";
@@ -16,20 +17,33 @@ import DocumentDetail from "./pages/DocumentDetail";
 import SettingsPage from "./pages/Settings";
 import Research from "./pages/Research";
 import ProductDetail from "./pages/ProductDetail";
+import Advice from "./pages/Advice";
+import BattlecardPrint from "./pages/BattlecardPrint";
+import { CommandPalette } from "./components/CommandPalette";
 
 export default function App() {
   const loc = useLocation();
-  const printView = loc.pathname.startsWith("/rapportages/") && loc.pathname.endsWith("/print");
+  const [palette, setPalette] = React.useState(false);
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette((v) => !v); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const printView = (loc.pathname.startsWith("/rapportages/") && loc.pathname.endsWith("/print")) || /^\/concurrenten\/\d+\/kaart$/.test(loc.pathname);
   if (printView) {
     return (
       <Routes>
         <Route path="/rapportages/:id/print" element={<ReportView />} />
+        <Route path="/concurrenten/:id/kaart" element={<BattlecardPrint />} />
       </Routes>
     );
   }
   return (
     <div className="min-h-screen bg-white">
-      <Sidebar />
+      <Sidebar onSearch={() => setPalette(true)} />
+      <CommandPalette open={palette} onOpenChange={setPalette} />
       <main className="ml-[248px] min-h-screen">
         <AnimatePresence mode="wait">
           <motion.div
@@ -47,6 +61,7 @@ export default function App() {
               <Route path="/concurrenten/:id" element={<CompetitorDetail />} />
               <Route path="/producten/:id" element={<ProductDetail />} />
               <Route path="/voorwaarden" element={<Conditions />} />
+              <Route path="/advies" element={<Advice />} />
               <Route path="/premielab" element={<PremiumLab />} />
               <Route path="/marktmonitor" element={<MarketMonitor />} />
               <Route path="/verbeterradar" element={<Radar />} />

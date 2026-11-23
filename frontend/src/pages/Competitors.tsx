@@ -35,7 +35,7 @@ export default function Competitors() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader module="concurrenten"
         title="Concurrenten"
         subtitle="Verzekeraars, gevolmachtigde agenten en tussenpersonen met klassieke auto-, motor- en bromfietsverzekeringen."
         actions={
@@ -77,7 +77,7 @@ export default function Competitors() {
             <motion.div key={p.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.02, 0.3) }}>
               <Card interactive onClick={() => nav(`/concurrenten/${p.id}`)} className="h-full p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <ProviderLogo name={p.name} logoUrl={p.logo_url} size={40} />
+                  <ProviderLogo name={p.name} logoUrl={p.logo_url} size={40} id={p.id} isReference={p.is_reference} />
                   <div className="flex flex-wrap justify-end gap-1.5">
                     {p.is_reference && <Badge tone="accent">Referentie</Badge>}
                     <Badge tone={PROVIDER_STATUS[p.status]?.tone}>{PROVIDER_STATUS[p.status]?.label}</Badge>

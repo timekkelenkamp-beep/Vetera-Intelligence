@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .config import PROJECT_DIR, get_settings
-from .routers import ai, compare, documents, premiums, products, providers, radar, reports, sources, system
+from .routers import ai, compare, documents, insights, premiums, products, providers, radar, reports, sources, system
 from .services.migrate import upgrade_database
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -59,7 +59,7 @@ async def unhandled(request: Request, exc: Exception):
                         status_code=500)
 
 
-for r in (providers, products, documents, compare, premiums, sources, ai, radar, reports, system):
+for r in (providers, products, documents, compare, premiums, sources, ai, radar, reports, system, insights):
     app.include_router(r.router)
 
 

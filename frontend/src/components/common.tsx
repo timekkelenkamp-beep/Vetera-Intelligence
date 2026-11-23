@@ -1,11 +1,12 @@
 import * as React from "react";
 import { FileText, ShieldCheck, ShieldAlert } from "lucide-react";
 import { cn, initials } from "@/lib/utils";
+import { colorFor } from "@/lib/chart";
 import { FINDING_STATUS } from "@/lib/labels";
 import { Badge, Tip } from "./ui/primitives";
 import { useSourceViewer } from "./SourceViewer";
 
-export function ProviderLogo({ name, logoUrl, size = 36, className }: { name: string; logoUrl?: string | null; size?: number; className?: string }) {
+export function ProviderLogo({ name, logoUrl, size = 36, className, id, isReference }: { name: string; logoUrl?: string | null; size?: number; className?: string; id?: number; isReference?: boolean }) {
   const [failed, setFailed] = React.useState(false);
   if (logoUrl && !failed) {
     return (
@@ -15,10 +16,11 @@ export function ProviderLogo({ name, logoUrl, size = 36, className }: { name: st
     );
   }
   // Nette tekstweergave zolang er geen goedgekeurd officieel logo is (geen nagemaakt logo).
+  const c = id !== undefined || isReference ? colorFor(id, isReference) : null;
   return (
     <div
       className={cn("flex items-center justify-center shrink-0 rounded-[10px] bg-surface text-ink-soft font-semibold tracking-tight", className)}
-      style={{ width: size, height: size, fontSize: size * 0.36 }}
+      style={{ width: size, height: size, fontSize: size * 0.36, ...(c ? { background: `color-mix(in srgb, ${c} 13%, white)`, color: `color-mix(in srgb, ${c} 85%, black)` } : {}) }}
       aria-label={name}
     >
       {initials(name) || "?"}

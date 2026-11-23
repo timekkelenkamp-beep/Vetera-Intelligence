@@ -44,7 +44,7 @@ export default function Radar() {
   const cols = SUGGESTION_STATUS;
   return (
     <div>
-      <PageHeader title="Vetera Verbeterradar" subtitle="Proactieve verbetervoorstellen voor de huidige Vetera-propositie — geen nieuw product. Datagedreven verbeteringen zijn onderbouwd met bronnen; innovatiehypotheses zijn nadrukkelijk onbewezen."
+      <PageHeader module="verbeterradar" title="Vetera Verbeterradar" subtitle="Proactieve verbetervoorstellen voor de huidige Vetera-propositie — geen nieuw product. Datagedreven verbeteringen zijn onderbouwd met bronnen; innovatiehypotheses zijn nadrukkelijk onbewezen."
         actions={<>
           <Button icon={<ScanSearch className="h-4 w-4" />} onClick={scan}>Signaleren uit data</Button>
           <Button icon={<Plus className="h-4 w-4" />} onClick={() => setManual(true)}>Eigen idee</Button>

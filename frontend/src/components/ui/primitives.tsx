@@ -6,6 +6,7 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { Tone } from "@/lib/labels";
+import { MODULES, tileStyle, type ModuleKey } from "@/lib/modules";
 
 /* ------------------------------------------------------------------ Button */
 const buttonVariants = cva(
@@ -199,10 +200,16 @@ export function Notice({ tone = "info", title, children, icon, className }: { to
 }
 
 /* ------------------------------------------------------------------ Page layout */
-export function PageHeader({ title, subtitle, actions, eyebrow }: { title: React.ReactNode; subtitle?: React.ReactNode; actions?: React.ReactNode; eyebrow?: React.ReactNode }) {
+export function PageHeader({ title, subtitle, actions, eyebrow, module }: { title: React.ReactNode; subtitle?: React.ReactNode; actions?: React.ReactNode; eyebrow?: React.ReactNode; module?: ModuleKey }) {
+  const m = module ? MODULES[module] : null;
   return (
     <div className="flex flex-wrap items-end justify-between gap-4 mb-7">
       <div className="min-w-0">
+        {m && (
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-[11px] shadow-[0_1px_2px_rgba(0,0,0,0.15),0_6px_16px_-6px_rgba(0,0,0,0.25)]" style={tileStyle(m.color)}>
+            <m.icon className="h-5 w-5 text-white" strokeWidth={2} />
+          </div>
+        )}
         {eyebrow && <div className="mb-1.5 text-[12.5px] font-medium text-ink-muted">{eyebrow}</div>}
         <h1 className="text-[28px] font-semibold tracking-tightest text-ink leading-tight">{title}</h1>
         {subtitle && <p className="mt-1.5 text-[14px] text-ink-muted max-w-3xl">{subtitle}</p>}
@@ -212,12 +219,14 @@ export function PageHeader({ title, subtitle, actions, eyebrow }: { title: React
   );
 }
 
-export function Stat({ label, value, hint, icon, onClick }: { label: string; value: React.ReactNode; hint?: React.ReactNode; icon?: React.ReactNode; onClick?: () => void }) {
+export function Stat({ label, value, hint, icon, onClick, color }: { label: string; value: React.ReactNode; hint?: React.ReactNode; icon?: React.ReactNode; onClick?: () => void; color?: string }) {
   return (
     <Card interactive={!!onClick} onClick={onClick} className="p-5">
       <div className="flex items-center justify-between">
         <span className="text-[12.5px] font-medium text-ink-muted">{label}</span>
-        {icon && <span className="text-ink-faint [&_svg]:h-4 [&_svg]:w-4">{icon}</span>}
+        {icon && (color ? (
+          <span className="flex h-7 w-7 items-center justify-center rounded-[8px] text-white [&_svg]:h-3.5 [&_svg]:w-3.5" style={tileStyle(color)}>{icon}</span>
+        ) : <span className="text-ink-faint [&_svg]:h-4 [&_svg]:w-4">{icon}</span>)}
       </div>
       <div className="mt-2 text-[30px] font-semibold tracking-tightest tabular text-ink leading-none">{value}</div>
       {hint && <div className="mt-2 text-[12px] text-ink-muted">{hint}</div>}

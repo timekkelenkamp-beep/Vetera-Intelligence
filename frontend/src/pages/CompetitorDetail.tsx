@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { cn, date, eur, relative } from "@/lib/utils";
 import { DOC_TYPE, OBS_TYPE, PROVIDER_STATUS, PROVIDER_TYPE, SOURCE_TYPE, VEHICLE, ACCESS } from "@/lib/labels";
 import { ProviderLogo } from "@/components/common";
+import { Battlecard, Timeline } from "@/components/ProviderInsights";
 import { ProductForm, ProviderForm, UploadDialog, useProviders } from "@/components/forms";
 import { Dialog, Menu, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, KeyValue, Loading, Notice, Select } from "@/components/ui/primitives";
@@ -45,7 +46,7 @@ export default function CompetitorDetail() {
       <button onClick={() => nav("/concurrenten")} className="mb-5 inline-flex items-center gap-1 text-[13px] text-ink-muted hover:text-ink"><ArrowLeft className="h-3.5 w-3.5" /> Concurrenten</button>
       <div className="mb-8 flex flex-wrap items-start justify-between gap-6">
         <div className="flex items-center gap-5">
-          <ProviderLogo name={p.name} logoUrl={p.logo_url} size={56} />
+          <ProviderLogo name={p.name} logoUrl={p.logo_url} size={56} id={p.id} isReference={p.is_reference} />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-[28px] font-semibold tracking-tightest">{p.name}</h1>
@@ -77,7 +78,7 @@ export default function CompetitorDetail() {
       {p.verification_note && p.status === "te_beoordelen" && <Notice tone="attention" title="Te beoordelen" className="mb-6">{p.verification_note}</Notice>}
 
       <Tabs value={tab} onValueChange={setTab} tabs={[
-        { value: "overzicht", label: "Overzicht" }, { value: "producten", label: "Producten", count: p.products.length },
+        { value: "overzicht", label: "Overzicht" }, ...(p.is_reference ? [] : [{ value: "kaart", label: "Concurrentiekaart" }]), { value: "tijdlijn", label: "Tijdlijn" }, { value: "producten", label: "Producten", count: p.products.length },
         { value: "documenten", label: "Documenten", count: p.documents.length }, { value: "premies", label: "Premies", count: p.premium_count },
         { value: "bronnen", label: "Bronnen", count: p.sources.length }, { value: "logo", label: "Logo" },
       ]}>
@@ -220,6 +221,8 @@ export default function CompetitorDetail() {
         </TabPanel>
 
         <TabPanel value="logo"><LogoManager provider={p} /></TabPanel>
+        <TabPanel value="kaart"><Battlecard providerId={p.id} /></TabPanel>
+        <TabPanel value="tijdlijn"><Timeline providerId={p.id} /></TabPanel>
       </Tabs>
 
       <ProviderForm open={edit} onOpenChange={setEdit} initial={p} />
@@ -292,7 +295,7 @@ function LogoManager({ provider }: { provider: any }) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className={cn("flex h-20 w-48 items-center justify-center rounded-xl border border-line", bgClass)}>
-              <ProviderLogo name={provider.name} logoUrl={provider.logo_url} size={40} />
+              <ProviderLogo name={provider.name} logoUrl={provider.logo_url} size={40} id={provider.id} isReference={provider.is_reference} />
             </div>
             <div>
               <div className="text-[14px] font-semibold">Huidig logo</div>

@@ -94,6 +94,19 @@ het resultaat als *vastgelegde proefberekening* opslaat (getoonde premie ≠ uit
 calculator is toegestaan, moet per bron worden vastgesteld (gebruiksvoorwaarden of schriftelijke toestemming).
 De knop *Automatisch* weigert en logt dit zolang er geen toegestane, gebouwde connector is.
 
+## Uitbreiding — inzichten en vormgeving
+
+| Functie | Status | Test |
+|---|---|---|
+| Kleurrijkere, rustige vormgeving: gekleurde module-iconen, vaste kleur per aanbieder, matrix als heatmap, kleurverloop op het dashboard | Gereed | H |
+| Positioneringskaart (premie × voorwaardenscore, kwadranten t.o.v. mediaan; producten zonder data apart vermeld) | Gereed | A |
+| Adviestool: klantvragen → passende producten met onderbouwing; onbekend blijft onbekend | Gereed | A, H |
+| Wat-als-simulator: hypothetische voorwaarden/premie, effect op scores en ranglijst; niets wordt opgeslagen | Gereed | A |
+| Concurrentiekaart per aanbieder (prijsniveau, sterke/zwakke punten, tegenargumenten, gespreksvragen), afdrukbaar | Gereed | A, H |
+| Tijdlijn per aanbieder (documenten, wijzigingen, premies, bevindingen, status) met filters | Gereed | A, H |
+| Marktbericht: automatisch na elke broncontrole, ook als rapport (PDF/Excel) | Gereed | A |
+| Snelzoeken (Ctrl+K / ⌘K) over aanbieders, producten, documenten, clausules en volledige tekst | Gereed | A |
+
 ---
 
 ## Bekende beperkingen en openstaande punten

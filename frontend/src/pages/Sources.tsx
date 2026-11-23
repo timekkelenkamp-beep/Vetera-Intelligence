@@ -17,7 +17,7 @@ export default function Sources({ initialTab }: { initialTab?: string }) {
   const quality = useQuery({ queryKey: ["quality"], queryFn: () => api.get("/quality") });
   return (
     <div>
-      <PageHeader title="Bronnen & documenten" subtitle="Centraal bronregister, documentbibliotheek met versiebeheer en datakwaliteitscontrole. Iedere conclusie moet hiernaar herleidbaar zijn." />
+      <PageHeader module="bronnen" title="Bronnen & documenten" subtitle="Centraal bronregister, documentbibliotheek met versiebeheer en datakwaliteitscontrole. Iedere conclusie moet hiernaar herleidbaar zijn." />
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })} tabs={[
         { value: "documenten", label: "Documenten" }, { value: "bronnen", label: "Bronregister" },
         { value: "kwaliteit", label: "Datakwaliteit", count: quality.data?.total }, { value: "bevindingen", label: "Te beoordelen bevindingen" },

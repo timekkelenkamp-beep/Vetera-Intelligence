@@ -23,6 +23,7 @@ REPORT_TYPES = {
     "radar": "Verbeterradar-rapport",
     "dossier": "Verdiepend marktonderzoek",
     "verkoop": "Verkoopargumenten per concurrent",
+    "marktbericht": "Marktbericht",
 }
 STANDARD_LIMITATIONS = [
     "Uitsluitend gebaseerd op gegevens die in Vetera Intelligence zijn vastgelegd op de rapportagedatum.",
@@ -217,6 +218,32 @@ def build_content(db: Session, report_type: str, params: dict) -> dict:
         summary.append(f"{len([x for x in dossiers if x])} onderzoeksdossier(s).")
         limitations.append("Dossiers zijn met AI samengesteld; marktcijfers zijn alleen opgenomen met bron.")
         products = []
+    if report_type == "marktbericht":
+        from .insights import market_brief
+        since = datetime.fromisoformat(params["since"]) if params.get("since") else None
+        until = datetime.fromisoformat(params["until"]) if params.get("until") else None
+        b = market_brief(db, since, until)
+        title = params.get("title") or f"Marktbericht {date.fromisoformat(b['period']['to'][:10]).strftime('%d-%m-%Y')}"
+        summary += b["headline"]
+        sections.append({"heading": "Gewijzigde polisvoorwaarden", "paragraphs": [] if b["changes"] else
+                         ["Geen inhoudelijke wijzigingen in deze periode."], "tables": [{
+                             "columns": ["Aanbieder", "Document", "Wijzigingen", "Soort", "Voorbeeld"],
+                             "rows": [[c["provider"], c["document"], str(c["count"]), ", ".join(c["categories"]),
+                                       c["examples"][0]["new"] if c["examples"] else ""] for c in b["changes"]]}]
+                         if b["changes"] else []})
+        if b["new_providers"]:
+            sections.append({"heading": "Nieuwe aanbieders", "paragraphs": [f"{p['name']} (status: {p['status']})" for p in b["new_providers"]]})
+        if b["price_signals"]:
+            sections.append({"heading": "Premiesignalen", "paragraphs": b["price_signals"]})
+        if b["unavailable_sources"]:
+            sections.append({"heading": "Niet bereikbare bronnen", "paragraphs": b["unavailable_sources"]})
+        if b["suggestions"]:
+            sections.append({"heading": "Nieuwe verbetervoorstellen", "paragraphs": [
+                f"{s['title']}{' (innovatiehypothese)' if s['kind'] == 'innovatiehypothese' else ''}" for s in b["suggestions"]]})
+        limitations.append(f"Periode {b['period']['from'][:16].replace('T', ' ')} t/m {b['period']['to'][:16].replace('T', ' ')}; "
+                           f"{b['checks']} broncontrole(s). Classificatie van wijzigingen is indicatief.")
+        products = []
+        params = {**params, "brief": b}
     if report_type == "verkoop":
         comp_id = params.get("competitor_product_id")
         vet_id = params.get("vetera_product_id") or (ref.id if ref else None)

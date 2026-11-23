@@ -16,6 +16,7 @@ const DESCR: Record<string, string> = {
   radar: "Alle verbetervoorstellen met onderbouwing en prioriteit.",
   dossier: "Verdiepende onderzoeksdossiers uit de Verbeterradar.",
   verkoop: "Advieskaart: waarom Vetera overwegen ten opzichte van een concurrent.",
+  marktbericht: "Wat er sinds de vorige broncontrole is veranderd in de markt.",
 };
 
 export default function Reports() {
@@ -56,7 +57,7 @@ export default function Reports() {
   const chip = (active: boolean) => cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px]", active ? "border-accent/30 bg-accent-soft text-accent-ink" : "border-line text-ink-soft hover:border-line-strong");
   return (
     <div>
-      <PageHeader title="Rapportages" subtitle="Professionele rapporten met managementsamenvatting, onderbouwing, bronverwijzingen en beperkingen — uitsluitend op basis van werkelijk vastgelegde gegevens." />
+      <PageHeader module="rapportages" title="Rapportages" subtitle="Professionele rapporten met managementsamenvatting, onderbouwing, bronverwijzingen en beperkingen — uitsluitend op basis van werkelijk vastgelegde gegevens." />
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_420px]">
         <div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

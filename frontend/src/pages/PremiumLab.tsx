@@ -19,7 +19,7 @@ export default function PremiumLab() {
   const tab = params.get("tab") || "vergelijking";
   return (
     <div>
-      <PageHeader title="Premielab" subtitle="Objectieve premievergelijking op basis van rekenprofielen. Alleen gelijkwaardige scenario's worden zonder waarschuwing naast elkaar gezet; premies worden nooit geschat." />
+      <PageHeader module="premielab" title="Premielab" subtitle="Objectieve premievergelijking op basis van rekenprofielen. Alleen gelijkwaardige scenario's worden zonder waarschuwing naast elkaar gezet; premies worden nooit geschat." />
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })} tabs={[
         { value: "vergelijking", label: "Vergelijking" }, { value: "premies", label: "Premiewaarnemingen" }, { value: "profielen", label: "Rekenprofielen" },
         { value: "import", label: "Excel Import Studio" }, { value: "historie", label: "Historie" }, { value: "analyse", label: "Uitsplitsing" }, { value: "calculators", label: "Proefberekeningen" },
