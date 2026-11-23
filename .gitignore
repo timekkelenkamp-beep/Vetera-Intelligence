@@ -1,0 +1,12 @@
+# Lokale data (database, documenten, imports, back-ups) – nooit committen
+data/
+backend/.env
+backend/.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+*.log
