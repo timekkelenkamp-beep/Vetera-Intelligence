@@ -234,3 +234,15 @@ def test_backup_and_restore(client):
     names = [p["name"] for p in client.get("/api/providers").json()]
     assert "Backuptest" in names and "Na backup" not in names
     assert client.post("/api/data/delete", json={"what": "premies"}).status_code == 422
+
+
+def test_delete_provider_and_document(client):
+    vet, comp, vp, cp = setup_providers(client)
+    up = client.post("/api/documents/upload", files=[("files", ("v.pdf", make_pdf(), "application/pdf"))],
+                     data={"provider_id": comp["id"], "product_id": cp["id"]}).json()[0]
+    feats = client.get("/api/features").json()
+    client.post("/api/findings", json={"product_id": cp["id"], "feature_id": feats[0]["id"], "status": "gedekt"})
+    assert client.delete(f"/api/documents/{up['document']['id']}").status_code == 200
+    assert client.get("/api/documents").json() == []
+    assert client.delete(f"/api/providers/{comp['id']}").status_code == 200
+    assert client.get(f"/api/products/{cp['id']}").status_code == 404

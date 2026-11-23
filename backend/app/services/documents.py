@@ -157,7 +157,7 @@ def detect_date(text: str) -> date | None:
 
 
 def detect_version_label(text: str) -> str | None:
-    m = re.search(r"\b(?:versie|editie|model|code)\s*[:.]?\s*([A-Z0-9][A-Z0-9.\-/ ]{1,25}\d)\b", text, re.IGNORECASE)
+    m = re.search(r"\b(?:versie|editie|model|code)\s*[:.]?\s*([A-Z0-9][A-Z0-9.\-/]{1,25}\d)\b", text, re.IGNORECASE)
     if m:
         return m.group(1).strip()
     m = re.search(r"\b([A-Z]{2,6}[ -]?\d{2,4}[-/.]?\d{0,4})\b", text)

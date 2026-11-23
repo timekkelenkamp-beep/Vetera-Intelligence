@@ -50,7 +50,8 @@ class Provider(TimestampMixin, Base):
     logo_source_url: Mapped[str | None] = mapped_column(String(1000))
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime)
 
-    products: Mapped[list[Product]] = relationship(back_populates="provider", foreign_keys="Product.provider_id")
+    products: Mapped[list[Product]] = relationship(back_populates="provider", foreign_keys="Product.provider_id", cascade="all, delete-orphan",
+                                                   passive_deletes=True)
 
 
 class RiskCarrier(TimestampMixin, Base):
@@ -136,7 +137,7 @@ class Document(TimestampMixin, Base):
 
     versions: Mapped[list[DocumentVersion]] = relationship(
         back_populates="document", foreign_keys="DocumentVersion.document_id",
-        order_by="DocumentVersion.imported_at")
+        order_by="DocumentVersion.imported_at", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class DocumentVersion(Base):
