@@ -39,6 +39,8 @@ def test_research_flow(client, monkeypatch):
     monkeypatch.setattr(research, "validate_external_url", lambda u: u)
     from app.services import monitor
     monkeypatch.setattr(monitor, "validate_external_url", lambda u: u)
+    from app.services import crawl
+    monkeypatch.setattr(crawl, "validate_external_url", lambda u: u)
 
     def fake_run(db, **kw):
         from app.models import AIAnalysis

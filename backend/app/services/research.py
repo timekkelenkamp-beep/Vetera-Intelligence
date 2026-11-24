@@ -27,6 +27,8 @@ from .ai_client import INT, STR, arr, build_preview, obj, run_structured
 from .common import audit, normalize_text, sha256_bytes
 from .documents import DocumentError, create_document_with_version
 from .excel_import import parse_amount
+from . import crawl
+from .common import COVERAGE_LEVELS
 from .monitor import FetchError, _Robots, fetch, make_client, pdf_links, validate_external_url, visible_text
 from .premiums import annualize
 from .settings_store import get_setting
@@ -95,7 +97,12 @@ Harde regels:
 - Laat velden leeg ('') of lijsten leeg als je iets niet hebt gevonden."""
 
 
+VEHICLE_NAMES = {"auto": "auto", "motor": "motor", "bromfiets": "bromfiets"}
+
+
 def start(db: Session, provider_id: int, dry_run: bool, progress=None) -> dict:
+    """Eerst de website zelf verkennen (sitemap, productpagina's, voorwaarden en verzekeringskaarten per
+    dekking). Alleen als daar te weinig uit komt, zoekt de AI aanvullend op het domein van de aanbieder."""
     progress = progress or (lambda *a, **k: None)
     prov = db.get(Provider, provider_id)
     if not prov:
@@ -108,16 +115,140 @@ def start(db: Session, provider_id: int, dry_run: bool, progress=None) -> dict:
             f"Reeds bekende producten: {', '.join(known) or 'geen'}")
     summary = {"items": {"aanbieder": 1}, "domein": domain}
     if dry_run:
-        return {"preview": build_preview(db, "productonderzoek", SYSTEM, user, summary, 4000, True)}
-    progress("Officiële website doorzoeken met AI…")
-    data, analysis = run_structured(db, kind="productonderzoek", system=SYSTEM, user_text=user, schema=RESEARCH_SCHEMA,
-                                    sent_summary=summary, question=f"Productonderzoek {prov.name}", web_search=True,
-                                    web_domains=[domain])
-    progress("Gevonden pagina's controleren en PDF-links verzamelen…")
-    candidates = enrich(db, prov, domain, data)
+        prev = build_preview(db, "productonderzoek", SYSTEM, user, summary, 4000, True)
+        prev["note"] = ("Eerst wordt de website zelf doorzocht (gratis). De AI-zoekopdracht hieronder wordt alleen "
+                        "gebruikt als daar te weinig uit komt; de kosten zijn dus maximaal dit bedrag.")
+        return {"preview": prev}
+    delay = float(get_setting(db, "monitor_request_delay_s", 3) or 0)
+    with make_client() as client:
+        robots = _Robots(client, get_settings().user_agent)
+        found = crawl.crawl_provider(client, robots, prov.website, delay=min(delay, 3), progress=progress)
+    candidates = crawl_candidates(db, prov, found)
+    analysis, notes = None, None
+    if len([d for d in candidates["documents"] if d["kind"] == "document"]) < 2:
+        progress("Te weinig gevonden op de website; aanvullend zoeken met AI…")
+        try:
+            data, analysis = run_structured(db, kind="productonderzoek", system=SYSTEM, user_text=user,
+                                            schema=RESEARCH_SCHEMA, sent_summary=summary,
+                                            question=f"Productonderzoek {prov.name}", web_search=True,
+                                            web_domains=[domain])
+            notes = data.get("notes")
+            merge_candidates(candidates, enrich(db, prov, domain, data))
+        except Exception as exc:  # noqa: BLE001 - AI is een aanvulling; de websiteverkenning blijft bruikbaar
+            db.rollback()
+            candidates["skipped"].append(f"Aanvullend AI-onderzoek mislukt: {str(exc)[:200]}")
+    if analysis is None:
+        analysis = AIAnalysis(kind="productonderzoek", model=None, question=f"Websiteverkenning {prov.name}",
+                              sent_summary={"items": {}, "domein": domain, "zonder_ai": True}, status="voltooid")
+        db.add(analysis)
+        db.flush()
+    candidates["missing"] = missing_report(candidates)
     analysis.validation = {"candidates": candidates, "provider_id": prov.id}
     db.commit()
-    return {"analysis_id": analysis.id, "cost_eur": analysis.cost_estimate, "notes": data.get("notes"), **candidates}
+    return {"analysis_id": analysis.id, "cost_eur": analysis.cost_estimate or 0, "notes": notes, **candidates}
+
+
+def crawl_candidates(db: Session, prov: Provider, found: dict) -> dict:
+    """Zet de websiteverkenning om in kandidaten: één product per voertuigsoort, documenten per dekking."""
+    known_urls = {s.url for s in db.scalars(select(Source).where(Source.url.is_not(None)))}
+    existing = {normalize_text(p.name): p.id for p in db.scalars(select(Product).where(Product.provider_id == prov.id))}
+    existing_by_vehicle = {}
+    for p in db.scalars(select(Product).where(Product.provider_id == prov.id)):
+        existing_by_vehicle.setdefault(p.vehicle_category, p.id)
+    vehicles = [v for v in ("auto", "motor", "bromfiets")
+                if any(x.get("vehicle_category") == v for x in found["documents"] + found["pages"])]
+    if not vehicles and (found["documents"] or found["pages"]):
+        vehicles = ["auto"]
+    products, documents, premiums = [], [], []
+    keys = {}
+    for v in vehicles:
+        key = f"p{len(products) + 1}"
+        keys[v] = key
+        page = next((x for x in found["pages"] if x.get("vehicle_category") == v), None) or \
+            (found["pages"][0] if found["pages"] else None)
+        name = f"Oldtimerverzekering {VEHICLE_NAMES[v]}"
+        products.append({"id": key, "name": name, "vehicle_category": v, "page_url": page["url"] if page else None,
+                         "risk_carrier": None, "selected": True,
+                         "existing_product_id": existing.get(normalize_text(name)) or existing_by_vehicle.get(v),
+                         "levels": sorted({d["coverage_level"] for d in found["documents"]
+                                           if d.get("vehicle_category") == v and d.get("coverage_level")},
+                                          key=lambda lv: list(COVERAGE_LEVELS).index(lv))})
+    first = products[0]["id"] if products else None
+    for d in sorted(found["documents"], key=lambda d: (d["document_type"] != "verzekeringskaart", d["title"])):
+        documents.append({"id": f"d{len(documents) + 1}", "kind": "document", "url": d["url"], "title": d["title"][:300],
+                          "document_type": d["document_type"], "coverage_level": d.get("coverage_level"),
+                          "vehicle_category": d.get("vehicle_category"),
+                          "product": keys.get(d.get("vehicle_category")) or first, "official": d["official"],
+                          "known": d["url"] in known_urls, "origin": "website",
+                          "selected": d["url"] not in known_urls})
+    for pg in found["pages"]:
+        if len(pg["text"]) < 400:
+            continue
+        documents.append({"id": f"d{len(documents) + 1}", "kind": "pagina", "url": pg["url"],
+                          "title": f"Productpagina: {pg['title']}"[:300], "document_type": "productinformatie",
+                          "coverage_level": None, "vehicle_category": pg.get("vehicle_category"),
+                          "product": keys.get(pg.get("vehicle_category")) or first, "official": True,
+                          "known": pg["url"] in known_urls, "origin": "website", "text": pg["text"],
+                          "selected": pg["url"] not in known_urls})
+        for pm in crawl.price_mentions(pg["text"]):
+            try:
+                amount = parse_amount(pm["amount"])
+            except ValueError:
+                continue
+            premiums.append({"id": f"r{len(premiums) + 1}", "product": keys.get(pg.get("vehicle_category")) or first,
+                             "amount": amount, "period": pm["period"], "coverage": None, "conditions": "vanaf-prijs, "
+                             "voorwaarden onbekend", "quote": pm["quote"], "page_url": pg["url"], "verified": True,
+                             "selected": amount is not None})
+    return {"products": products, "documents": documents, "premiums": premiums, "calculators": [],
+            "skipped": found["skipped"]}
+
+
+def merge_candidates(base: dict, extra: dict) -> None:
+    """Voeg AI-resultaten toe aan de websiteverkenning zonder dubbelingen."""
+    by_name = {normalize_text(p["name"]): p["id"] for p in base["products"]}
+    by_vehicle = {p["vehicle_category"]: p["id"] for p in base["products"]}
+    remap = {}
+    for p in extra["products"]:
+        hit = by_name.get(normalize_text(p["name"])) or by_vehicle.get(p["vehicle_category"])
+        if hit:
+            remap[p["id"]] = hit
+            continue
+        new = f"p{len(base['products']) + 1}"
+        remap[p["id"]] = new
+        base["products"].append({**p, "id": new, "levels": []})
+        by_vehicle.setdefault(p["vehicle_category"], new)
+    urls = {d["url"] for d in base["documents"]}
+    for d in extra["documents"]:
+        if d["url"] in urls:
+            continue
+        c = crawl.classify(f"{d['title']} {d['url']}")
+        base["documents"].append({**d, "id": f"d{len(base['documents']) + 1}", "kind": "document",
+                                  "product": remap.get(d.get("product")), "coverage_level": c["coverage_level"],
+                                  "vehicle_category": c["vehicle_category"]})
+    for r in extra["premiums"]:
+        base["premiums"].append({**r, "id": f"r{len(base['premiums']) + 1}", "product": remap.get(r.get("product"))})
+    for cal in extra["calculators"]:
+        base["calculators"].append({**cal, "id": f"c{len(base['calculators']) + 1}", "product": remap.get(cal.get("product"))})
+    base["skipped"] += extra["skipped"]
+
+
+def missing_report(c: dict) -> list[str]:
+    """Wat ontbreekt er nog voor een eerlijke vergelijking?"""
+    out = []
+    if not c["products"]:
+        return ["Geen product voor klassieke voertuigen gevonden op de website. Voeg het product en de "
+                "voorwaarden handmatig toe of controleer het websiteadres."]
+    for p in c["products"]:
+        docs = [d for d in c["documents"] if d["product"] == p["id"]]
+        if not any(d["document_type"] == "polisvoorwaarden" for d in docs):
+            out.append(f"{p['name']}: geen polisvoorwaarden (PDF) gevonden.")
+        if not any(d["document_type"] == "verzekeringskaart" for d in docs):
+            out.append(f"{p['name']}: geen verzekeringskaart (IPID) gevonden.")
+        if not p.get("levels"):
+            out.append(f"{p['name']}: niet vast te stellen welke dekkingen (WA, beperkt/volledig casco) er zijn.")
+    if not c["premiums"]:
+        out.append("Geen gepubliceerde prijzen gevonden; premies alleen via eigen berekening of Excel-import.")
+    return out
 
 
 def enrich(db: Session, prov: Provider, domain: str, data: dict) -> dict:
@@ -238,15 +369,21 @@ def import_selected(db: Session, provider_id: int, analysis_id: int, selection: 
             progress(f"Document {n} van {len(docs)} ophalen: {d['title'][:80]}", n - 1, len(docs))
             pid = product_ids.get(d.get("product"))
             try:
-                validate_external_url(d["url"])
-                if not robots.allowed(d["url"]):
-                    raise FetchError("robots.txt staat ophalen niet toe")
-                time.sleep(delay)
-                r = fetch(client, d["url"])
-                if r.status_code >= 400:
-                    raise FetchError(f"HTTP {r.status_code}")
-                if not r.content.startswith(b"%PDF"):
-                    raise FetchError("geen PDF-document")
+                if d.get("kind") == "pagina":
+                    # tekst van de productpagina zelf, als doorzoekbaar document zodat citaten controleerbaar zijn
+                    content = text_pdf(d.get("text") or "", d["title"], d["url"])
+                    filename = "productpagina.pdf"
+                else:
+                    validate_external_url(d["url"])
+                    if not robots.allowed(d["url"]):
+                        raise FetchError("robots.txt staat ophalen niet toe")
+                    time.sleep(delay)
+                    r = fetch(client, d["url"])
+                    if r.status_code >= 400:
+                        raise FetchError(f"HTTP {r.status_code}")
+                    if not r.content.startswith(b"%PDF"):
+                        raise FetchError("geen PDF-document")
+                    content, filename = r.content, crawl.pdf_filename(d["url"])
                 src = db.scalars(select(Source).where(Source.url == d["url"])).first()
                 if not src:
                     src = Source(url=d["url"], title=d["title"], provider_id=prov.id, product_id=pid,
@@ -255,16 +392,22 @@ def import_selected(db: Session, provider_id: int, analysis_id: int, selection: 
                                  visibility="publiek", monitor_enabled=True)
                     db.add(src)
                     db.flush()
-                src.content_hash = sha256_bytes(r.content)
+                src.content_hash = sha256_bytes(content)
                 existing = db.scalars(select(Document).where(Document.source_id == src.id)).first()
                 doc, v, _ = create_document_with_version(
-                    db, r.content, urlparse(d["url"]).path.rsplit("/", 1)[-1] or "document.pdf", provider_id=prov.id,
+                    db, content, filename, provider_id=prov.id,
                     product_id=pid, document_type=d["document_type"], title=d["title"][:300], visibility="publiek",
                     document_id=existing.id if existing else None, source_url=d["url"], source_id=src.id)
                 src.processing_status = "verwerkt"
+                if d.get("coverage_level") or d.get("vehicle_category"):
+                    doc.identification = {**(doc.identification or {}), "scope_level": d.get("coverage_level"),
+                                          "scope_vehicle": d.get("vehicle_category")}
+                if pid and d.get("coverage_level"):
+                    mark_level(db, pid, d["coverage_level"], d["title"], v.id if v.status == "gereed" else None)
                 created["documents"] += 1
                 if v.status == "gereed" and pid:
-                    new_versions.append({"version_id": v.id, "product_id": pid, "title": doc.title, "pages": v.page_count})
+                    new_versions.append({"version_id": v.id, "product_id": pid, "title": doc.title, "pages": v.page_count,
+                                         "document_type": doc.document_type})
                 db.commit()
             except (FetchError, DocumentError) as exc:
                 db.rollback()
@@ -311,6 +454,46 @@ def import_selected(db: Session, provider_id: int, analysis_id: int, selection: 
     return {"created": created, "errors": errors, "new_versions": new_versions}
 
 
+def text_pdf(text: str, title: str, url: str) -> bytes:
+    """Maak een eenvoudige, doorzoekbare PDF van paginatekst (met regelafbreking)."""
+    import io
+    import textwrap
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    c.setTitle(title[:200])
+    lines = [title, f"Bron: {url}", ""]
+    for para in text.splitlines():
+        lines += textwrap.wrap(para, 95) or [""]
+    y = 800
+    for ln in lines:
+        c.setFont("Helvetica", 9.5)
+        c.drawString(45, y, ln.encode("cp1252", "replace").decode("cp1252"))
+        y -= 13
+        if y < 45:
+            c.showPage()
+            y = 800
+    c.save()
+    return buf.getvalue()
+
+
+def mark_level(db: Session, product_id: int, level: str, title: str, version_id: int | None) -> None:
+    """Een document per dekkingsniveau op de website = dit niveau wordt aangeboden (tenzij handmatig vastgelegd)."""
+    from ..models import ProductCoverage
+    pc = db.scalars(select(ProductCoverage).where(ProductCoverage.product_id == product_id,
+                                                  ProductCoverage.level == level)).first()
+    if pc and pc.locked:
+        return
+    if pc is None:
+        pc = ProductCoverage(product_id=product_id, level=level)
+        db.add(pc)
+    pc.offered = True
+    pc.local_name = pc.local_name or title[:200]
+    pc.document_version_id = pc.document_version_id or version_id
+    pc.origin = pc.origin or "website"
+
+
 # ---------------------------------------------------------------- volledige verwerking
 def analyze_versions(db: Session, versions: list[dict], progress) -> list[dict]:
     from .ai_tasks import extract_document
@@ -328,6 +511,19 @@ def analyze_versions(db: Session, versions: list[dict], progress) -> list[dict]:
     return out
 
 
+MAX_AUTO_PAGES = 30
+
+
+def split_for_analysis(versions: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Korte, gestructureerde bronnen (verzekeringskaarten, productpagina, korte voorwaarden) eerst door AI;
+    lange polisvoorwaarden alleen op verzoek, zodat de kosten beperkt blijven."""
+    order = {"verzekeringskaart": 0, "productinformatie": 1}
+    quick = [v for v in versions if v.get("document_type") in order or (v.get("pages") or 0) <= MAX_AUTO_PAGES]
+    later = [v for v in versions if v not in quick]
+    quick.sort(key=lambda v: order.get(v.get("document_type"), 2))
+    return quick, later
+
+
 def full_research(db: Session, progress, provider_id: int, analyze: bool) -> dict:
     """Zoeken → standaard geselecteerde kandidaten importeren → logo → optioneel AI-analyse."""
     res = start(db, provider_id, False, progress)
@@ -337,7 +533,12 @@ def full_research(db: Session, progress, provider_id: int, analyze: bool) -> dic
     from .logos import auto_logo
     prov = db.get(Provider, provider_id)
     logo = auto_logo(db, prov)
-    analysis = analyze_versions(db, imp["new_versions"], progress) if analyze and imp["new_versions"] else []
+    quick, later = split_for_analysis(imp["new_versions"])
+    analysis = analyze_versions(db, quick, progress) if analyze and quick else []
+    if analyze and later:
+        analysis.append({"title": f"{len(later)} uitgebreide polisvoorwaarden", "ok": True, "skipped": True,
+                         "note": "Opgeslagen en doorzoekbaar; analyseer ze per document als je meer detail wilt "
+                                 "(kost meer omdat ze lang zijn)."})
     return {"provider_id": provider_id, "found": {k: len(res[k]) for k in ("products", "documents", "premiums", "calculators")},
             "created": imp["created"], "errors": imp["errors"] + res.get("skipped", [])[:5],
             "logo": logo.get("status"), "analysis": analysis}

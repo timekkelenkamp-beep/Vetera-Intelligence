@@ -58,7 +58,7 @@ export function AddByNameDialog({ open, onOpenChange }: { open: boolean; onOpenC
             {r.analysis?.length > 0 && (
               <div className="space-y-1">
                 <div className="text-[13px] font-medium">AI-analyse van polisvoorwaarden</div>
-                {r.analysis.map((a: any, i: number) => <div key={i} className="flex items-center gap-2 text-[12.5px]">{a.ok ? <CheckCircle2 className="h-3.5 w-3.5 text-positive" /> : <XCircle className="h-3.5 w-3.5 text-negative" />}<span className="truncate">{a.title}</span><span className="text-ink-muted">{a.ok ? `${a.created} bevindingen` : a.error}</span></div>)}
+                {r.analysis.map((a: any, i: number) => <div key={i} className="flex items-center gap-2 text-[12.5px]">{a.ok ? <CheckCircle2 className="h-3.5 w-3.5 text-positive" /> : <XCircle className="h-3.5 w-3.5 text-negative" />}<span className="truncate">{a.title}</span><span className="text-ink-muted">{a.skipped ? a.note : a.ok ? `${a.created} bevindingen` : a.error}</span></div>)}
               </div>
             )}
             {r.errors?.length > 0 && <Notice tone="caution" icon={<AlertTriangle />} title="Niet alles gelukt">{r.errors.slice(0, 6).map((e: string) => <div key={e} className="truncate">{e}</div>)}</Notice>}

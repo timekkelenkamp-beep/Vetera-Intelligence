@@ -4,7 +4,9 @@ import { Sparkles, FileText, Package, Calculator, Link2, CheckCircle2, XCircle, 
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { cn, eur } from "@/lib/utils";
-import { DOC_TYPE, PERIOD, VEHICLE } from "@/lib/labels";
+import { COVERAGE_LEVELS, DOC_TYPE, PERIOD, VEHICLE } from "@/lib/labels";
+
+const LEVEL = Object.fromEntries(COVERAGE_LEVELS.map((l) => [l.key, l.label]));
 import { useAiAction } from "./AiAction";
 import { JobProgress, useJob } from "./Job";
 import { Dialog } from "./ui/overlay";
@@ -117,12 +119,13 @@ function ResearchDialog({ provider, result, onClose }: { provider: any; result: 
       {importJob ? <JobProgress job={ij} title="Documenten ophalen en verwerken" /> : !imported ? (
         nothing ? <Notice tone="neutral">Er is niets gevonden op de website. Voeg producten en documenten handmatig toe.</Notice> : (
           <div className="space-y-5">
-            {result.products.length > 0 && <Group title="Producten">{result.products.map((p: any) => <Row key={p.id} item={p} icon={<Package />} title={p.name} sub={`${VEHICLE[p.vehicle_category]}${p.page_url ? ` · ${p.page_url}` : ""}`} warn={p.existing_product_id ? "Bestaat al; documenten worden aan het bestaande product gekoppeld" : undefined} />)}</Group>}
-            {result.documents.length > 0 && <Group title="Polisvoorwaarden en documenten">{result.documents.map((d: any) => <Row key={d.id} item={d} icon={<FileText />} title={d.title} sub={`${DOC_TYPE[d.document_type] || d.document_type}${pname(d.product) ? ` · ${pname(d.product)}` : ""} · ${d.url}`} warn={!d.official ? "Niet op de officiële website" : d.known ? "Staat al in het bronregister" : undefined} />)}</Group>}
+            {result.products.length > 0 && <Group title="Producten">{result.products.map((p: any) => <Row key={p.id} item={p} icon={<Package />} title={p.name} sub={`${VEHICLE[p.vehicle_category]}${p.levels?.length ? ` · ${p.levels.map((l: string) => LEVEL[l]).join(", ")}` : ""}`} warn={p.existing_product_id ? "Bestaat al; documenten worden aan het bestaande product gekoppeld" : undefined} />)}</Group>}
+            {result.documents.length > 0 && <Group title="Polisvoorwaarden en documenten">{result.documents.map((d: any) => <Row key={d.id} item={d} icon={<FileText />} title={d.title} sub={`${DOC_TYPE[d.document_type] || d.document_type}${pname(d.product) ? ` · ${pname(d.product)}` : ""}${d.coverage_level ? ` · ${LEVEL[d.coverage_level]}` : d.kind === "pagina" ? " · tekst van de pagina" : ""}`} warn={!d.official ? "Niet op de officiële website" : d.known ? "Staat al in het bronregister" : undefined} />)}</Group>}
             {result.premiums.length > 0 && <Group title="Gepubliceerde premies">{result.premiums.map((p: any) => <Row key={p.id} item={p} icon={<Calculator />} disabled={!p.verified} title={<span className="flex items-center gap-2">{p.amount !== null ? eur(p.amount) : "–"} {PERIOD[p.period]}{p.verified ? <Badge tone="positive"><ShieldCheck className="h-3 w-3" /> op de pagina gevonden</Badge> : <Badge tone="negative">niet teruggevonden</Badge>}</span>} sub={`“${p.quote}” · geldt voor: ${p.conditions}`} warn={!p.verified ? "Het bedrag staat niet letterlijk op de pagina en wordt daarom niet overgenomen." : "Wordt opgeslagen als ‘openbare indicatie’ zonder rekenprofiel."} />)}</Group>}
             {result.calculators.length > 0 && <Group title="Premiecalculators">{result.calculators.map((c: any) => <Row key={c.id} item={c} icon={<Link2 />} title="Toevoegen aan het calculatorregister" sub={c.url} warn="Wordt niet automatisch ingevuld; toestemming eerst vastleggen." />)}</Group>}
+            {result.missing?.length > 0 && <Notice tone="neutral" icon={<AlertTriangle />} title="Nog niet gevonden">{result.missing.map((s: string) => <div key={s}>{s}</div>)}</Notice>}
             {result.skipped?.length > 0 && <Notice tone="caution" icon={<AlertTriangle />} title="Niet bezocht">{result.skipped.slice(0, 5).map((s: string) => <div key={s} className="truncate">{s}</div>)}</Notice>}
-            <p className="text-[11.5px] text-ink-muted">Kosten van dit onderzoek ≈ {eur(result.cost_eur)}. PDF's worden opgehaald met respect voor robots.txt.</p>
+            <p className="text-[11.5px] text-ink-muted">{result.cost_eur ? <>Kosten van dit onderzoek ≈ {eur(result.cost_eur)}.</> : <>Gevonden door de website zelf te doorzoeken (geen AI-kosten).</>} PDF's worden opgehaald met respect voor robots.txt.</p>
           </div>
         )
       ) : (

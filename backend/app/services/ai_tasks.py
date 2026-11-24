@@ -298,7 +298,11 @@ product niet aanbiedt krijg geen items. 'quote' is een letterlijk citaat (max. 3
 of een lege string als er geen passage is. page_number is 0 als er geen passage is.
 'explanation' is maximaal één korte zin; value_text zo kort mogelijk (bijv. '€ 150', 'max. 5.000 km', 'vanaf 25 jaar'). Bij tekst-/bedragrubrieken
 vul je value_text met de concrete waarde (bijv. '€ 150 per gebeurtenis', 'minimaal 25 jaar oud')."""
-    user = (f"Document: '{doc.title}' (type {doc.document_type}), versie {v.version_label or '-'}.\n"
+    scope = (doc.identification or {}).get("scope_level")
+    scope = scope if scope in COVERAGE_LEVELS else None
+    scope_txt = (f"Dit document geldt alleen voor dekkingsniveau {scope} ({COVERAGE_LEVELS[scope]}). Gebruik voor "
+                 f"regelingen uit dit document coverage_level '{scope}'.\n" if scope else "")
+    user = (scope_txt + f"Document: '{doc.title}' (type {doc.document_type}), versie {v.version_label or '-'}.\n"
             f"Rubrieken:\n{feat_txt}\n\nDocumenttekst:\n{pages}")
     summary = {"items": {"document_pages": len(v.pages)}, "document_version_id": v.id, "document": doc.title,
                "visibility": doc.visibility}
@@ -333,7 +337,7 @@ vul je value_text met de concrete waarde (bijv. '€ 150 per gebeurtenis', 'mini
         if not f:
             continue
         level = it.get("coverage_level")
-        level = level if level in COVERAGE_LEVELS else None
+        level = level if level in COVERAGE_LEVELS else scope
         if (f.id, level) in seen_keys:
             continue
         seen_keys.add((f.id, level))
