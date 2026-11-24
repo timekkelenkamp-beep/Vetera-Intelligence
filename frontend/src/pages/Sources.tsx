@@ -107,7 +107,7 @@ function Registry() {
     <>
       <div className="mb-4 flex justify-end"><Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setEdit({})}>Bron toevoegen</Button></div>
       <Card className="overflow-hidden">
-        {!data?.length ? <EmptyState icon={<Link2 />} title="Bronregister is leeg" description="Bronnen worden automatisch toegevoegd bij het ophalen van een PDF via URL, of voeg productpagina's en documenten handmatig toe om ze wekelijks te laten controleren." /> : (
+        {!data?.length ? <EmptyState icon={<Link2 />} title="Bronregister is leeg" description="Bronnen worden automatisch toegevoegd bij het ophalen van een PDF via URL, of voeg productpagina's en documenten handmatig toe om ze te laten controleren op wijzigingen." /> : (
           <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]">
               <thead><tr className="border-b border-line text-left text-[11.5px] text-ink-muted">{["Bron", "Aanbieder", "Soort bron", "Toegang", "Status", "Laatste controle", "Monitor", ""].map((h) => <th key={h} className="px-3 py-2.5 font-medium first:pl-5">{h}</th>)}</tr></thead>
@@ -165,7 +165,7 @@ function SourceForm({ open, onOpenChange, initial }: { open: boolean; onOpenChan
         <Field label="Publicatiedatum"><Input type="date" value={f.published_at || ""} onChange={set("published_at")} /></Field>
         <Field label="Versienummer"><Input value={f.version_label || ""} onChange={set("version_label")} /></Field>
         <Field label="Toelichting toestemming" className="col-span-2"><Textarea rows={2} value={f.permission_note || ""} onChange={set("permission_note")} /></Field>
-        <div className="col-span-2"><Switch checked={!!f.monitor_enabled} onCheckedChange={(v) => setF({ ...f, monitor_enabled: v })} label="Meenemen in wekelijkse controle" /></div>
+        <div className="col-span-2"><Switch checked={!!f.monitor_enabled} onCheckedChange={(v) => setF({ ...f, monitor_enabled: v })} label="Meenemen in broncontroles" /></div>
       </div>
     </Dialog>
   );

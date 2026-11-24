@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { cn, date, relative } from "@/lib/utils";
 import { CHANGE_TONE, NOTIF_TYPE } from "@/lib/labels";
 import { useAiAction } from "@/components/AiAction";
+import { MonitorScheduleSelect, scheduleLabel } from "@/components/MonitorSchedule";
 import { Dialog, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Badge, Button, Card, CardHeader, EmptyState, Loading, Notice, PageHeader, Select, Stat } from "@/components/ui/primitives";
 
@@ -30,14 +31,14 @@ export default function MarketMonitor() {
   const s = status.data;
   return (
     <div>
-      <PageHeader module="marktmonitor" title="Marktmonitor" subtitle="Wekelijkse, respectvolle controle van bronnen (robots.txt, conditionele verzoeken, vertraging per website) met wijzigingsdetectie en meldingen."
-        actions={<Button variant="primary" icon={<Play className="h-4 w-4" />} onClick={() => start(s?.overdue ? "inhaal" : "handmatig")} loading={!!s?.running} disabled={!s?.monitored_sources}>{s?.running ? "Controle loopt…" : s?.overdue ? "Inhaalcontrole starten" : "Nu controleren"}</Button>} />
+      <PageHeader module="marktmonitor" title="Marktmonitor" subtitle="Controleer bronnen op nieuwe polisvoorwaarden en wijzigingen wanneer jij dat wilt — of laat het automatisch doen. Respectvol: robots.txt, conditionele verzoeken en vertraging per website."
+        actions={<><MonitorScheduleSelect mode={s?.mode} days={s?.interval_days} className="w-60" /><Button variant="primary" icon={<Play className="h-4 w-4" />} onClick={() => start(s?.overdue ? "inhaal" : "handmatig")} loading={!!s?.running} disabled={!s?.monitored_sources}>{s?.running ? "Controle loopt…" : s?.overdue ? "Inhaalcontrole starten" : "Nu controleren"}</Button></>} />
       {s?.overdue && s.monitored_sources > 0 && <Notice tone="caution" icon={<AlarmClock />} className="mb-6" title="Controle gemist">{s.message}</Notice>}
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
         <Stat label="Gemonitorde bronnen" value={s?.monitored_sources ?? "–"} hint={!s?.monitored_sources ? "Zet ‘monitoren’ aan in het bronregister" : undefined} />
         <Stat label="Laatste controle" value={<span className="text-[20px]">{s?.last_run_at ? relative(s.last_run_at) : "Nog niet"}</span>} />
-        <Stat label="Volgende controle" value={<span className="text-[20px]">{s?.next_due_at ? date(s.next_due_at) : "–"}</span>} hint={`Elke ${s?.interval_days ?? 7} dagen`} />
-        <Stat label="Planning" value={<span className="text-[20px]">{s?.auto ? "Automatisch" : "Windows-taak"}</span>} hint={s?.auto ? "De server controleert zelf" : "Installeer met scripts\\schedule_weekly_check.bat"} icon={<CalendarClock />} />
+        <Stat label="Volgende controle" value={<span className="text-[20px]">{s?.mode === "automatisch" ? (s?.next_due_at ? date(s.next_due_at) : "Bij eerstvolgende gelegenheid") : "Wanneer jij wilt"}</span>} hint={s?.mode === "automatisch" ? undefined : "Klik op ‘Nu controleren’"} />
+        <Stat label="Planning" value={<span className="text-[20px]">{scheduleLabel(s?.mode, s?.interval_days)}</span>} hint={s?.mode !== "automatisch" ? "Wijzig dit bovenaan de pagina" : s?.auto ? "De server voert hem zelf uit" : "Via de Windows-taak (scripts\\schedule_weekly_check.bat)"} icon={<CalendarClock />} />
       </div>
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })} tabs={[{ value: "bericht", label: "Marktbericht" }, { value: "meldingen", label: "Meldingen" }, { value: "wijzigingen", label: "Documentwijzigingen" }, { value: "controles", label: "Controles" }]}>
         <TabPanel value="bericht"><MarketBrief /></TabPanel>

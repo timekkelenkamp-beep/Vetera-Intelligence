@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api, useCloud } from "@/lib/api";
 import { date, eur, num } from "@/lib/utils";
 import { Dialog, TabPanel, Tabs } from "@/components/ui/overlay";
+import { MonitorScheduleSelect } from "@/components/MonitorSchedule";
 import { Badge, Button, Card, CardHeader, Field, Input, KeyValue, Loading, Notice, PageHeader, Select, Switch } from "@/components/ui/primitives";
 
 export default function SettingsPage() {
@@ -144,9 +145,9 @@ function MonitorSettings({ s, save }: { s: any; save: (b: any) => void }) {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card className="space-y-4 p-6">
         <div className="text-[15px] font-semibold">Broncontrole</div>
-        <Field label="Interval (dagen)"><Input type="number" defaultValue={s.monitor_interval_days} onBlur={(e) => save({ monitor_interval_days: Number(e.target.value) })} /></Field>
+        <Field label="Hoe vaak controleren" hint="Polisvoorwaarden en premies veranderen meestal maar een paar keer per jaar. Standaard start je een controle zelf via Marktmonitor → Nu controleren."><MonitorScheduleSelect mode={s.monitor_mode} days={s.monitor_interval_days} /></Field>
         <Field label="Wachttijd tussen verzoeken naar dezelfde website (seconden)" hint="Voorkomt onnodige belasting van websites."><Input type="number" defaultValue={s.monitor_request_delay_s} onBlur={(e) => save({ monitor_request_delay_s: Number(e.target.value) })} /></Field>
-        {s._auto_monitor ? <Notice tone="info" title="Automatische controle">De server controleert elk uur of de broncontrole aan de beurt is en voert hem dan zelf uit.</Notice> : <Notice tone="info" title="Wekelijkse Windows-taak">Voer eenmalig <code>scripts\schedule_weekly_check.bat</code> uit. De taak draait wanneer de computer aan staat; een gemiste controle wordt bij de volgende start van de app gemeld en kan worden ingehaald.</Notice>}
+        {s.monitor_mode === "automatisch" && (s._auto_monitor ? <Notice tone="info" title="Automatische controle">De server kijkt regelmatig of de controle aan de beurt is en voert hem dan zelf uit.</Notice> : <Notice tone="info" title="Windows-taak nodig">Voer eenmalig <code>scripts\schedule_weekly_check.bat</code> uit. De taak kijkt elke week of de controle volgens jouw keuze aan de beurt is; een gemiste controle wordt bij de volgende start van de app gemeld.</Notice>)}
       </Card>
       <Card className="space-y-4 p-6">
         <div className="text-[15px] font-semibold">Premies</div>

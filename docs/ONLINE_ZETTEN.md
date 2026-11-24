@@ -34,7 +34,7 @@ Gaan er interne Vetera-documenten of niet-openbare premiegegevens in, overleg da
 - **Wachtwoord wijzigen:** Render → *vetera-intelligence* → **Environment** → `VETERA_APP_PASSWORD` aanpassen →
   *Save*. Iedereen moet daarna opnieuw inloggen.
 - **AI-sleutel later toevoegen:** zelfde plek, variabele `ANTHROPIC_API_KEY`.
-- **Wekelijkse broncontrole:** gebeurt online automatisch; de server kijkt elk uur of een controle aan de beurt is.
+- **Broncontrole:** standaard start je die zelf (Marktmonitor → *Nu controleren*). Kies je bovenaan de Marktmonitor voor automatisch (maand, kwartaal, half jaar of jaar), dan voert de server hem zelf uit.
 - **Back-up:** in de app via *Instellingen → Data & back-up*. Download de ZIP regelmatig naar een veilige plek.
 - **Eigen domeinnaam** (bijv. `intelligence.vetera.nl`): Render → *Settings → Custom Domains*.
 

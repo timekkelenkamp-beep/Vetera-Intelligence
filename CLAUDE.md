@@ -33,4 +33,4 @@ de backend op http://127.0.0.1:3000.
 ## Online (Render)
 - `Dockerfile` + `render.yaml`; online modus = `VETERA_ALLOW_REMOTE_ACCESS=true`. Dan staat alles onder `/api`
   (behalve `auth.PUBLIC_API`) achter de wachtwoordcookie (`app/auth.py`) en faalt de app dicht zonder wachtwoord.
-- `VETERA_AUTO_MONITOR=true` start een uurlijkse controle in `main.lifespan` (geen Windows-taak in de cloud).
+- Broncontrole standaard `monitor_mode=handmatig`; alleen bij `automatisch` + interval voert de server (`VETERA_AUTO_MONITOR=true`, uurlijkse check in `main.lifespan`) of de Windows-taak hem uit.

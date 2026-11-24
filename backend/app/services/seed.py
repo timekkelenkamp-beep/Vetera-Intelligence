@@ -115,7 +115,8 @@ DEFAULT_SETTINGS = {
     "ai_max_request_cost_eur": 2.0,
     "ai_allow_nonpublic": False,  # niet-publieke data nooit zonder expliciete toestemming
     "ai_web_research": False,     # web-zoeken door AI alleen na expliciete activering
-    "monitor_interval_days": 7,
+    "monitor_mode": "handmatig",   # handmatig | automatisch — standaard start de gebruiker controles zelf
+    "monitor_interval_days": 91,  # bij automatisch: elk kwartaal
     "monitor_last_run_at": None,
     "monitor_request_delay_s": 3,
     "premium_stale_months": 12,

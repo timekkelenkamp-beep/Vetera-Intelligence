@@ -256,7 +256,7 @@ export function UploadDialog({ open, onOpenChange, providerId, productId, docume
                 <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.aanbieder.nl/polisvoorwaarden.pdf" />
                 <Button onClick={fetchUrl} loading={busy} disabled={!url.startsWith("http")}>Ophalen</Button>
               </div>
-              <p className="mt-2 text-[11.5px] text-ink-muted">robots.txt wordt gerespecteerd; de bron wordt aan het bronregister toegevoegd voor de wekelijkse controle.</p>
+              <p className="mt-2 text-[11.5px] text-ink-muted">robots.txt wordt gerespecteerd; de bron komt in het bronregister, zodat je hem later opnieuw kunt laten controleren.</p>
             </div>
           )}
           {documentId && <Notice tone="info" className="mt-4">Een identiek bestand wordt herkend en niet opnieuw opgeslagen.</Notice>}

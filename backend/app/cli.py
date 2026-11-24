@@ -20,7 +20,14 @@ def main(argv: list[str]) -> int:
         from .services.monitor import run_monitor, schedule_status
         db = SessionLocal()
         try:
-            if cmd == "catch-up" and not schedule_status(db)["overdue"]:
+            st = schedule_status(db)
+            if st["mode"] != "automatisch":
+                print("Broncontrole staat op 'handmatig' (Instellingen → Monitor & premies); niets gedaan.")
+                return 0
+            if cmd == "weekly-check" and not st["overdue"]:
+                print(f"Nog niet aan de beurt (volgende: {st['next_due_at']}).")
+                return 0
+            if cmd == "catch-up" and not st["overdue"]:
                 print("Geen inhaalcontrole nodig.")
                 return 0
             run = run_monitor(db, "gepland" if cmd == "weekly-check" else "inhaal")

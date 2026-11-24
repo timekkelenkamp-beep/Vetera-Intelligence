@@ -5,8 +5,10 @@ from tests.conftest import make_pdf, setup_providers
 
 def test_schedule_missed_check_detection(client):
     st = client.get("/api/monitor/status").json()
-    assert st["overdue"] is False                     # geen bronnen = niets te missen
+    assert st["overdue"] is False and st["mode"] == "handmatig"
     client.post("/api/sources", json={"url": "https://example.org/voorwaarden.pdf", "monitor_enabled": True})
+    assert client.get("/api/monitor/status").json()["overdue"] is False   # handmatig: nooit 'gemist'
+    client.patch("/api/settings", json={"monitor_mode": "automatisch", "monitor_interval_days": 7})
     st = client.get("/api/monitor/status").json()
     assert st["overdue"] is True
     client.patch("/api/settings", json={})

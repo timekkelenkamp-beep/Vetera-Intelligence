@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api", tags=["systeem"])
 EDITABLE_SETTINGS = {
     "ai_enabled": bool, "ai_model": str, "ai_effort": str, "ai_monthly_budget_eur": float,
     "ai_max_request_cost_eur": float, "ai_allow_nonpublic": bool, "ai_web_research": bool,
-    "monitor_interval_days": int, "monitor_request_delay_s": float, "premium_stale_months": int,
+    "monitor_interval_days": int, "monitor_mode": str, "monitor_request_delay_s": float, "premium_stale_months": int,
     "premium_difference_alert_pct": float, "onboarding_done": bool,
 }
 
@@ -116,6 +116,10 @@ def update_settings(data: dict, db: Session = Depends(get_db)):
             raise HTTPException(422, f"Ongeldige waarde voor {k}")
         if k == "ai_model" and val not in AVAILABLE_MODELS:
             raise HTTPException(422, "Onbekend model")
+        if k == "monitor_mode" and val not in ("handmatig", "automatisch"):
+            raise HTTPException(422, "Kies handmatig of automatisch")
+        if k == "monitor_interval_days" and not 1 <= val <= 400:
+            raise HTTPException(422, "Interval moet tussen 1 en 400 dagen liggen")
         if k == "ai_effort" and val not in ("low", "medium", "high", "xhigh", "max"):
             raise HTTPException(422, "Onbekend effort-niveau")
         set_setting(db, k, val)

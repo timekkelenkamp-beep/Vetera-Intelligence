@@ -285,13 +285,17 @@ def run_monitor(db: Session, trigger: str = "handmatig", source_ids: list[int] |
 
 
 def schedule_status(db: Session) -> dict:
+    """Bij 'handmatig' (standaard) wordt er nooit vanzelf gecontroleerd en verschijnt er geen
+    'gemist'-melding; de gebruiker start een controle zelf wanneer dat zinvol is."""
+    mode = get_setting(db, "monitor_mode", "handmatig") or "handmatig"
     last = get_setting(db, "monitor_last_run_at")
-    interval = int(get_setting(db, "monitor_interval_days", 7) or 7)
+    interval = int(get_setting(db, "monitor_interval_days", 91) or 91)
     last_dt = datetime.fromisoformat(last) if last else None
-    due = (last_dt + timedelta(days=interval)) if last_dt else None
     enabled_sources = db.query(Source).filter(Source.monitor_enabled.is_(True)).count()
-    overdue = bool(enabled_sources) and (due is None or datetime.now() > due + timedelta(hours=12))
-    return {"last_run_at": last, "interval_days": interval, "next_due_at": due.isoformat() if due else None,
+    auto = mode == "automatisch"
+    due = (last_dt + timedelta(days=interval)) if (last_dt and auto) else None
+    overdue = auto and bool(enabled_sources) and (due is None or datetime.now() > due + timedelta(hours=12))
+    return {"mode": mode, "last_run_at": last, "interval_days": interval, "next_due_at": due.isoformat() if due else None,
             "overdue": overdue, "monitored_sources": enabled_sources,
             "message": ("Er is een geplande controle gemist (bijvoorbeeld omdat de computer uit stond). "
                         "Start een inhaalcontrole." if overdue and last_dt else

@@ -39,7 +39,7 @@ wachtwoord invullen. Het `Dockerfile` en `render.yaml` staan klaar.
 
 - **AI-functies:** open `backend\.env` (aangemaakt door de installatie) en vul `ANTHROPIC_API_KEY=...` in.
   Herstart daarna de app. Zonder sleutel werken alle basisfuncties.
-- **Wekelijkse broncontrole:** dubbelklik `scripts\schedule_weekly_check.bat`. Dit registreert een Windows-taak
+- **Automatische broncontrole (optioneel):** standaard start je een controle zelf in de Marktmonitor. Kies je daar voor automatisch (bijv. elk kwartaal), dubbelklik dan `scripts\schedule_weekly_check.bat`. Dit registreert een Windows-taak
   (maandag 09:00) die ook alsnog draait zodra de computer weer aan staat. Verwijderen kan met
   `scripts\remove_weekly_check.bat`.
 - **OCR voor gescande PDF's:** installeer Tesseract (met Nederlands taalpakket) en Poppler, en daarna

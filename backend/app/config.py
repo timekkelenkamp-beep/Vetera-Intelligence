@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     app_password: str | None = None
     session_secret: str | None = None
     session_days: int = 30
-    auto_monitor: bool = False  # in de cloud: wekelijkse broncontrole door de server zelf
+    auto_monitor: bool = False  # in de cloud: server voert broncontroles zelf uit als de gebruiker "automatisch" kiest
     user_agent: str = "VeteraIntelligence/1.0 (lokale broncontrole; respecteert robots.txt)"
 
     @property
