@@ -109,6 +109,7 @@ De knop *Automatisch* weigert en logt dit zolang er geen toegestane, gebouwde co
 | Opzoeken op naam: naam invullen → officiële website opzoeken → website doorzoeken → importeren → logo → optioneel AI-analyse, als achtergrondtaak met voortgang | Gereed | A (gesimuleerde AI), X (echte websites) |
 | Lange acties (onderzoek, importeren, analyseren) als achtergrondtaak, zodat de hostingdienst geen time-out (502) geeft | Gereed | A |
 | Vergelijken per dekkingsniveau (WA, WA + brand/diefstal, beperkt casco, volledig casco): bevindingen per niveau of voor alle dekkingen, per product welke niveaus worden aangeboden en onder welke naam, AI-analyse per niveau, scores volgens de dekking van het rekenprofiel | Gereed | A, H |
+| Overzicht als startpunt van de vergelijker: kernkenmerken (zelf te kiezen) als symbolen, per concurrent 'ruimer/beperkter dan Vetera' en prijsniveau, onbekende kenmerken geteld in plaats van getoond; kortere AI-antwoorden met details inklapbaar | Gereed | A, H |
 | Snelzoeken (Ctrl+K / ⌘K) over aanbieders, producten, documenten, clausules en volledige tekst | Gereed | A |
 
 ---

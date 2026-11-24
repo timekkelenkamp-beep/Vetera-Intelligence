@@ -424,3 +424,92 @@ def quicksearch(db: Session, q: str, limit: int = 6) -> list[dict]:
             out.append({"type": "tekst", "title": snip, "subtitle": f"{d.title} · p. {pg.page_number}",
                         "version_id": v.id, "page": pg.page_number, "link": f"/documenten/{d.id}"})
     return out
+
+
+# ---------------------------------------------------------------- overzicht (kernvergelijking)
+SYMBOL = {"gedekt": "ja", "voorwaardelijk": "deels", "aanvullende_clausule": "deels", "uitgesloten": "nee"}
+
+
+def price_vs_vetera(db: Session, product_id: int) -> dict:
+    diffs = []
+    for prof in db.scalars(select(ReferenceProfile)):
+        c = compare_profile(db, prof.id)
+        if c["baseline"] != "vetera":
+            continue
+        for r in c["rows"]:
+            if r.get("product_id") == product_id and r["diff_pct"] is not None:
+                diffs.append({"profile": prof.name, "diff_pct": r["diff_pct"], "comparable": r["fully_comparable"]})
+    avg = round(sum(d["diff_pct"] for d in diffs) / len(diffs), 1) if diffs else None
+    return {"avg_diff_pct": avg, "profiles": len(diffs), "observations": diffs,
+            "comparable": sum(1 for d in diffs if d["comparable"])}
+
+
+def _short_value(f: Finding, feature: Feature) -> str | None:
+    if f.value_number is not None and feature.value_type == "bedrag":
+        return f"€ {f.value_number:,.0f}".replace(",", ".")
+    v = (f.value_text or "").strip()
+    if not v:
+        return None
+    return v if len(v) <= 28 else v[:26].rstrip() + "…"
+
+
+def overview(db: Session, product_ids: list[int], reference_id: int | None, level: str | None) -> dict:
+    """Compacte vergelijking: kernkenmerken als symbolen, per concurrent wat beter/slechter is dan Vetera
+    en het prijsniveau. Onbekende onderdelen worden geteld, niet uitgeschreven."""
+    from .analysis import explain_difference
+    from .common import COVERAGE_LEVELS
+    level = level if level in COVERAGE_LEVELS else None
+    products = [p for p in (db.get(Product, i) for i in product_ids) if p]
+    ref = db.get(Product, reference_id) if reference_id else None
+    if ref and ref.id not in [p.id for p in products]:
+        products.insert(0, ref)
+    products.sort(key=lambda p: (not (ref and p.id == ref.id),))
+    ids = [p.id for p in products]
+    feats = db.scalars(select(Feature).where(Feature.active.is_(True)).order_by(Feature.sort_order)).all()
+    core = [f for f in feats if f.is_core]
+    fmap = current_findings(db, ids, level)
+    from .analysis import coverage_map, level_info
+    cmap = coverage_map(db, ids)
+    labels = {p.id: {**product_label(db, p), "level_info": level_info(db, p.id, level, cmap)} for p in products}
+
+    def cmp(feature, pid):
+        if not ref or pid == ref.id:
+            return None
+        d = explain_difference(feature, fmap.get((ref.id, feature.id)), fmap.get((pid, feature.id)), "Vetera",
+                               labels[pid]["provider_name"])
+        if not d:
+            return None
+        return {"concurrent_ruimer": "beter", "referentie_ruimer": "slechter", "afwijkend": "anders"}.get(d["kind"]), d["text"]
+
+    rows = []
+    for f in core:
+        cells = {}
+        for pid in ids:
+            fd = fmap.get((pid, f.id))
+            known = bool(fd and fd.status in KNOWN_STATUSES)
+            c = cmp(f, pid)
+            cells[str(pid)] = None if not fd else {
+                "finding_id": fd.id, "status": fd.status, "symbol": SYMBOL.get(fd.status, "onbekend"),
+                "value": _short_value(fd, f) if known else None, "known": known,
+                "compare": c[0] if c else None, "compare_text": c[1] if c else None,
+                "reviewed": fd.review_status in ("goedgekeurd", "gecorrigeerd"),
+            }
+        rows.append({"feature": {"id": f.id, "key": f.key, "label": f.label, "category": f.category,
+                                 "value_type": f.value_type}, "cells": cells})
+    summaries = []
+    for p in products:
+        if ref and p.id == ref.id:
+            continue
+        better, worse = [], []
+        for f in feats:
+            c = cmp(f, p.id)
+            if c and c[0] == "beter":
+                better.append(f.label)
+            elif c and c[0] == "slechter":
+                worse.append(f.label)
+        unknown = sum(1 for f in feats if not ((fd := fmap.get((p.id, f.id))) and fd.status in KNOWN_STATUSES))
+        summaries.append({**labels[p.id], "better": better, "worse": worse, "unknown": unknown,
+                          "total": len(feats), "price": price_vs_vetera(db, p.id)})
+    return {"reference_id": ref.id if ref else None, "level": level, "products": [labels[i] for i in ids],
+            "rows": rows, "summaries": summaries,
+            "core_count": len(core), "feature_count": len(feats)}

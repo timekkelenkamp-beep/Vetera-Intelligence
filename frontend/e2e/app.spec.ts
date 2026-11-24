@@ -26,7 +26,8 @@ test("concurrent en product toevoegen via de interface", async ({ page }) => {
   await expect(page.getByText("E2E Oldtimerpolis")).toBeVisible();
   await page.goto("/voorwaarden");
   await expect(page.getByRole("button", { name: /E2E Testverzekeraar · E2E Oldtimerpolis/ })).toBeVisible();
-  await expect(page.getByText("Minimale voertuigleeftijd")).toBeVisible();
+  await expect(page.getByText("Kernkenmerken")).toBeVisible();
+  await expect(page.getByText("Dagelijks gebruik toegestaan")).toBeVisible();
 });
 
 test("premie vastleggen en vergelijken", async ({ page }) => {

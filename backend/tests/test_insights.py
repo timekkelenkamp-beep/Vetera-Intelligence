@@ -73,3 +73,25 @@ def test_battlecard_timeline_brief_quicksearch(client):
     assert any(x["type"] == "aanbieder" for x in qs)
     qs = client.get("/api/insights/quicksearch", params={"q": "kortsluiting"}).json()
     assert any(x["type"] == "tekst" and x["version_id"] == up["version"]["id"] for x in qs)
+
+
+def test_overview_compact(client):
+    vet, comp, vp, cp, feats = _setup(client)
+    client.post("/api/findings", json={"product_id": vp["id"], "feature_id": feats["dek_transport"]["id"], "status": "gedekt"})
+    client.post("/api/findings", json={"product_id": cp["id"], "feature_id": feats["dek_transport"]["id"], "status": "uitgesloten"})
+    client.post("/api/findings", json={"product_id": vp["id"], "feature_id": feats["er_standaard"]["id"], "status": "gedekt", "value_number": 150})
+    client.post("/api/findings", json={"product_id": cp["id"], "feature_id": feats["geb_evenementen"]["id"], "status": "gedekt"})
+    client.post("/api/findings", json={"product_id": vp["id"], "feature_id": feats["geb_evenementen"]["id"], "status": "voorwaardelijk"})
+    o = client.get("/api/insights/overview", params={"product_ids": f"{cp['id']}", "reference": vp["id"]}).json()
+    assert o["products"][0]["id"] == vp["id"]                      # referentie eerst
+    assert len(o["rows"]) == 12 and o["core_count"] == 12
+    row = {r["feature"]["key"]: r for r in o["rows"]}
+    assert row["dek_transport"]["cells"][str(cp["id"])]["compare"] == "slechter"
+    assert row["geb_evenementen"]["cells"][str(cp["id"])]["compare"] == "beter"
+    assert row["er_standaard"]["cells"][str(vp["id"])]["value"] == "€ 150"
+    s = o["summaries"][0]
+    assert s["better"] == ["Evenementen en rally's"] and s["worse"] == ["Schade tijdens transport"]
+    assert s["unknown"] == s["total"] - 2
+    f = feats["dek_ruitbreuk"]
+    client.patch(f"/api/features/{f['id']}", json={"is_core": True})
+    assert client.get("/api/insights/overview", params={"product_ids": str(cp["id"])}).json()["core_count"] == 13

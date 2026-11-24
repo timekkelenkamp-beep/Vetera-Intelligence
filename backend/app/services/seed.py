@@ -85,6 +85,11 @@ FEATURES: list[tuple[str, str, str, str, str, list[str]]] = [
      ["verzamelaar", "collectie", "museum"]),
 ]
 
+# Kernkenmerken voor het overzicht (zelf aan te passen in de app)
+CORE_FEATURES = ["acc_min_leeftijd_bestuurder", "acc_dagelijks_gebruik", "geb_km_beperking", "geb_evenementen",
+                 "geb_buitenland", "waa_taxatie", "waa_totaal_verlies", "dek_diefstal", "dek_transport",
+                 "dek_pechhulp", "er_standaard", "col_meerdere_voertuigen"]
+
 EXAMPLE_PROFILES = [
     dict(name="Klassieke auto – lage waarde", vehicle_category="auto", vehicle_type="Personenauto",
          build_year=1978, insured_value=8000, valuation_value=8000, driver_age_band="45-65", annual_km=3000,
@@ -132,7 +137,7 @@ def seed_defaults(db: Session) -> None:
     for i, (key, cat, label, aspect, vtype, kws) in enumerate(FEATURES):
         if key not in existing:
             db.add(Feature(key=key, category=cat, label=label, scoring_aspect=aspect, value_type=vtype,
-                           keywords=kws, sort_order=i))
+                           keywords=kws, sort_order=i, is_core=key in CORE_FEATURES))
     for k, v in DEFAULT_SETTINGS.items():
         if db.get(Setting, k) is None:
             db.add(Setting(key=k, value=v))

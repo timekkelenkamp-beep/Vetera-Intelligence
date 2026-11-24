@@ -217,6 +217,7 @@ class Feature(Base):
     keywords: Mapped[list | None] = mapped_column(JSON)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_core: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # in het overzicht
 
 
 class Finding(Base):

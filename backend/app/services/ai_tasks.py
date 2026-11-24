@@ -31,7 +31,9 @@ Harde regels:
 - Citaten moeten letterlijk uit de aangeleverde tekst komen.
 - Presenteer concurrenten nooit onterecht negatief; benoem ook hun aantoonbare sterke punten.
 - Toon onzekerheid expliciet. Geen claims als 'beste dekking' of 'slechtste verzekeraar'.
-- Schrijf in helder, zakelijk Nederlands."""
+- Schrijf in helder, zakelijk Nederlands.
+- Schrijf kort en concreet: korte zinnen, geen herhaling, geen inleidingen of samenvattingen van de vraag.
+  Noem aanbieders en kenmerken bij naam ('Diefstal: Vetera gedekt, GIO voorwaardelijk') in plaats van lange omschrijvingen."""
 
 
 class ContextBuilder:
@@ -225,8 +227,12 @@ def build_ask_context(db: Session, question: str, consent_nonpublic: bool = Fals
 def ask(db: Session, question: str, dry_run: bool, consent_nonpublic: bool = False) -> dict:
     ctx = build_ask_context(db, question, consent_nonpublic)
     system = BASE_RULES + """
-Beantwoord de onderzoeksvraag gestructureerd: kort antwoord, belangrijkste bevindingen, vergelijking,
-gevolgen voor Vetera, bronnen (met ref naar de id's), onzekerheden, ontbrekende gegevens en vervolgstappen.
+Beantwoord de onderzoeksvraag gestructureerd en beknopt:
+- short_answer: maximaal 3 zinnen, het directe antwoord op de vraag.
+- key_findings: maximaal 5 punten van elk maximaal 20 woorden, met refs.
+- comparison: maximaal 6 regels, elk één aanbieder of kenmerk met één korte zin.
+- implications_for_vetera, uncertainties, missing_data, next_steps: elk maximaal 3 korte punten.
+- sources: alleen de bronnen die je echt gebruikt.
 Als de gegevens onvoldoende zijn, zeg dat dan in het korte antwoord en benoem welke gegevens ontbreken."""
     user = f"Vandaag: {date.today().isoformat()}\nOnderzoeksvraag: {question}\n\nBeschikbare gegevens:\n{ctx.render()}"
     if dry_run:
@@ -289,7 +295,8 @@ Geef per rubriek één item met coverage_level 'alle' als de regeling voor alle 
 gebruik, stalling). Verschilt de regeling per dekkingsniveau (typisch bij brand, diefstal, storm, ruit, vandalisme,
 casco, eigen risico), geef dan één item per aangeboden niveau met het juiste coverage_level. Een niveau dat het
 product niet aanbiedt krijg geen items. 'quote' is een letterlijk citaat (max. 300 tekens) van de opgegeven pagina,
-of een lege string als er geen passage is. page_number is 0 als er geen passage is. Bij tekst-/bedragrubrieken
+of een lege string als er geen passage is. page_number is 0 als er geen passage is.
+'explanation' is maximaal één korte zin; value_text zo kort mogelijk (bijv. '€ 150', 'max. 5.000 km', 'vanaf 25 jaar'). Bij tekst-/bedragrubrieken
 vul je value_text met de concrete waarde (bijv. '€ 150 per gebeurtenis', 'minimaal 25 jaar oud')."""
     user = (f"Document: '{doc.title}' (type {doc.document_type}), versie {v.version_label or '-'}.\n"
             f"Rubrieken:\n{feat_txt}\n\nDocumenttekst:\n{pages}")
@@ -403,7 +410,8 @@ def sales_card(db: Session, vetera_id: int, competitor_id: int, dry_run: bool, u
 Stel een compacte advieskaart op voor verzekeringsadviseurs: 'Waarom Vetera overwegen ten opzichte van
 <concurrent>?'. Maximaal vijf argumenten. Maak per argument onderscheid tussen het feitelijke productverschil
 (fact), het praktische klantvoordeel (customer_benefit) en het mogelijke verkoopargument (sales_argument).
-Elk argument moet refs bevatten naar aangeleverde bevindingen. Benoem ook eerlijk waar de concurrent
+Elk argument moet refs bevatten naar aangeleverde bevindingen. Houd fact, customer_benefit en sales_argument
+elk op maximaal één korte zin. Benoem ook eerlijk waar de concurrent
 aantoonbaar gunstiger is en welke beperkingen Vetera heeft. Voeg vragen toe die een adviseur kan stellen."""
     user = f"Vetera-product: {vl['name']}. Concurrent: {cl['provider_name']} – {cl['name']}.\n\nGegevens:\n{ctx.render()}"
     if dry_run:
@@ -454,7 +462,8 @@ Maak GEEN nieuw Vetera-product of 'Vetera 2.0'; alles zijn voorstellen voor door
 Prioriteit is kwalitatief (hoog/middel/laag) en onderbouwd in priority_rationale op basis van aantoonbaarheid,
 klantwaarde, commerciële aantrekkelijkheid, onderscheidend vermogen, uitvoerbaarheid, risico's en
 beschikbaarheid van informatie. Noem geen omzet-, conversie- of marktgroottecijfers tenzij ze in de bronnen staan;
-vermeld anders dat deze niet betrouwbaar te bepalen zijn. Geef 4 tot 8 voorstellen."""
+vermeld anders dat deze niet betrouwbaar te bepalen zijn. Geef 4 tot 8 voorstellen.
+Houd elk tekstveld kort: titel maximaal 8 woorden, summary één zin, overige velden maximaal 2 zinnen."""
     if web:
         system += "\nJe mag webonderzoek gebruiken voor bredere marktontwikkelingen; vermeld de gebruikte URL's in market_context."
     user = f"Focus: {focus or 'algemeen'}\n\nGegevens:\n{ctx.render()}"

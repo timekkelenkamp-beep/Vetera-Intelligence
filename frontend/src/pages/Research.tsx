@@ -81,9 +81,15 @@ export default function Research() {
                     <span>Kosten ≈ {eur(result.cost_eur)}</span>
                   </div>
                 </Card>
-                <Section title="Belangrijkste bevindingen" list={ans.key_findings?.map((f: any) => (
+                <Section title="Belangrijkste bevindingen" list={ans.key_findings?.slice(0, 5).map((f: any) => (
                   <span>{f.text} <span className="ml-1 inline-flex flex-wrap gap-1">{f.refs?.map((r: string) => <Ref key={r} r={r} />)}</span></span>
                 ))} />
+                <details className="group rounded-2xl border border-line bg-white">
+                  <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3.5 text-[13.5px] font-medium text-ink hover:bg-surface/50">
+                    <span>Meer details: vergelijking, bronnen, onzekerheden en vervolgstappen</span>
+                    <span className="text-[12px] text-ink-muted group-open:hidden">Tonen</span><span className="hidden text-[12px] text-ink-muted group-open:inline">Verbergen</span>
+                  </summary>
+                  <div className="space-y-6 border-t border-line p-5">
                 {ans.comparison?.length > 0 && (
                   <Card>
                     <CardHeader title="Vergelijking" />
@@ -116,6 +122,8 @@ export default function Research() {
                 <Section title="Onzekerheden" list={ans.uncertainties} tone="caution" />
                 <Section title="Ontbrekende gegevens" list={ans.missing_data} />
                 <Section title="Mogelijke vervolgstappen" list={ans.next_steps} />
+                  </div>
+                </details>
               </>
             )}
           </div>

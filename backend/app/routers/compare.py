@@ -53,7 +53,7 @@ def create_feature(data: dict, db: Session = Depends(get_db)):
 def update_feature(fid: int, data: dict, db: Session = Depends(get_db)):
     f = get_or_404(db, Feature, fid, "Kenmerk")
     apply_updates(db, f, data, ["label", "category", "description", "value_type", "scoring_aspect", "keywords",
-                                "active", "sort_order"], "feature")
+                                "active", "sort_order", "is_core"], "feature")
     db.commit()
     return to_dict(f)
 

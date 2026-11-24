@@ -64,3 +64,9 @@ def market_brief(since: str | None = None, until: str | None = None, db: Session
 @router.get("/quicksearch")
 def quicksearch(q: str, db: Session = Depends(get_db)):
     return insights.quicksearch(db, q)
+
+
+@router.get("/overview")
+def overview(product_ids: str, reference: int | None = None, level: str | None = None, db: Session = Depends(get_db)):
+    ids = [int(x) for x in product_ids.split(",") if x.strip().isdigit()]
+    return insights.overview(db, ids, reference, level)

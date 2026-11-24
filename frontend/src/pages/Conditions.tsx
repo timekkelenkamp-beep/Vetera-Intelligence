@@ -2,12 +2,13 @@ import * as React from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState, type VisibilityState } from "@tanstack/react-table";
-import { ScatterChart as ScatterIcon, FlaskConical, LayoutGrid, Table2, Gauge, Download, Search, ArrowUpDown, Columns3, Handshake, Sparkles, Info, Check, ShieldCheck } from "lucide-react";
+import { Eye, ScatterChart as ScatterIcon, FlaskConical, LayoutGrid, Table2, Gauge, Download, Search, ArrowUpDown, Columns3, Handshake, Sparkles, Info, Check, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAiAction } from "@/components/AiAction";
 import { PositioningView, WhatIfView } from "@/components/InsightViews";
+import { OverviewView } from "@/components/Overview";
 import { FindingStatus, ProviderLogo, SourceRef, VerifiedMark, useDebounced } from "@/components/common";
 import { FindingEditor } from "@/components/FindingEditor";
 import { useProducts } from "@/components/forms";
@@ -15,12 +16,12 @@ import { COVERAGE, COVERAGE_LEVELS } from "@/lib/labels";
 import { Dialog, Menu } from "@/components/ui/overlay";
 import { Badge, Button, Card, EmptyState, Input, Loading, Notice, PageHeader, Segmented, Select, Switch, Tip } from "@/components/ui/primitives";
 
-type View = "kaarten" | "tabel" | "scores" | "positionering" | "watals";
+type View = "overzicht" | "kaarten" | "tabel" | "scores" | "positionering" | "watals";
 
 export default function Conditions() {
   const [params, setParams] = useSearchParams();
   const all = useProducts();
-  const [view, setView] = React.useState<View>((params.get("view") as View) || "tabel");
+  const [view, setView] = React.useState<View>((params.get("view") as View) || "overzicht");
   const [selected, setSelected] = React.useState<number[]>([]);
   const [reference, setReference] = React.useState<number | null>(null);
   const level = params.get("level") || "";
@@ -44,8 +45,9 @@ export default function Conditions() {
         title="Voorwaardenvergelijker"
         subtitle="Vergelijk polisvoorwaarden per kenmerk, met bronverwijzing naar document, pagina en artikel."
         actions={<Segmented value={view} onChange={(v) => { setView(v); setParams((p) => { p.set("view", v); return p; }); }} options={[
+          { value: "overzicht", label: <><Eye className="h-3.5 w-3.5" /> Overzicht</> },
+          { value: "tabel", label: <><Table2 className="h-3.5 w-3.5" /> Alle details</> },
           { value: "kaarten", label: <><LayoutGrid className="h-3.5 w-3.5" /> Kaarten</> },
-          { value: "tabel", label: <><Table2 className="h-3.5 w-3.5" /> Tabel</> },
           { value: "scores", label: <><Gauge className="h-3.5 w-3.5" /> Scores</> },
           { value: "positionering", label: <><ScatterIcon className="h-3.5 w-3.5" /> Positionering</> },
           { value: "watals", label: <><FlaskConical className="h-3.5 w-3.5" /> Wat als</> },
@@ -74,7 +76,7 @@ export default function Conditions() {
               </Select>
               {!all.data.some((p) => p.is_reference) && <span className="text-[12px] text-caution">Leg eerst het Vetera-product vast om als referentie te gebruiken.</span>}
             </div>
-            {(view === "tabel" || view === "kaarten") && (
+            {(view === "tabel" || view === "kaarten" || view === "overzicht") && (
               <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
                 <span className="text-[12.5px] font-medium text-ink-muted">Dekking</span>
                 <Segmented value={level || "alle"} onChange={(v) => setLevel(v === "alle" ? "" : v)} options={[{ value: "alle", label: "Alle dekkingen" }, ...COVERAGE_LEVELS.map((c) => ({ value: c.key, label: c.short }))]} />
@@ -84,6 +86,7 @@ export default function Conditions() {
           </Card>
           {view === "positionering" ? <PositioningView /> : view === "watals" ? <WhatIfView products={all.data} /> :
             selected.length === 0 ? <Card><EmptyState title="Selecteer producten" /></Card> :
+            view === "overzicht" ? <OverviewView ids={selected} reference={reference} level={level} products={all.data} /> :
             view === "tabel" ? <MatrixView ids={selected} reference={reference} products={all.data} level={level} /> :
             view === "kaarten" ? <CardsView ids={selected} reference={reference} level={level} /> : <ScoresView ids={selected} />}
         </>
@@ -104,6 +107,7 @@ function MatrixView({ ids, reference, products, level }: { ids: number[]; refere
   const [category, setCategory] = React.useState("");
   const [onlyDiff, setOnlyDiff] = React.useState(false);
   const [onlyUnknown, setOnlyUnknown] = React.useState(false);
+  const [showEmpty, setShowEmpty] = React.useState(false);
   const [urlParams] = useSearchParams();
   const [q, setQ] = React.useState(urlParams.get("q") || "");
   const dq = useDebounced(q);
@@ -155,7 +159,11 @@ function MatrixView({ ids, reference, products, level }: { ids: number[]; refere
               {!cell && p.level_info?.offered === false && <div className="text-[11.5px] text-ink-faint">Dekking niet aangeboden</div>}
               {cell?.document_version_id && <div className="mt-0.5"><SourceRef versionId={cell.document_version_id} page={cell.page_number} article={cell.article} quote={cell.quote} className="-ml-1.5" /></div>}
               {diff && diff.kind !== "onzeker" && (
-                <div className={cn("mt-1 text-[11.5px] leading-snug", diff.kind === "concurrent_ruimer" ? "text-caution" : diff.kind === "referentie_ruimer" ? "text-accent" : "text-ink-muted")}>{diff.text}</div>
+                <Tip content={diff.text}>
+                  <span className={cn("mt-1 inline-block rounded-full px-1.5 py-px text-[10.5px] font-medium", diff.kind === "concurrent_ruimer" ? "bg-[#fdf5e0] text-[#8a6100]" : diff.kind === "referentie_ruimer" ? "bg-accent-soft text-accent-ink" : "bg-surface text-ink-muted")}>
+                    {diff.kind === "concurrent_ruimer" ? "ruimer dan Vetera" : diff.kind === "referentie_ruimer" ? "Vetera ruimer" : "afwijkend"}
+                  </span>
+                </Tip>
               )}
             </button>
           );
@@ -165,7 +173,11 @@ function MatrixView({ ids, reference, products, level }: { ids: number[]; refere
     return cols;
   }, [data]); // eslint-disable-line
 
-  const table = useReactTable<any>({ data: data?.rows || [], columns, state: { sorting, columnVisibility: visibility }, onSortingChange: setSorting, onColumnVisibilityChange: setVisibility, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
+  const allRows: any[] = data?.rows || [];
+  const isEmptyRow = (r: any) => Object.values(r.cells).every((c: any) => !c || !["gedekt", "uitgesloten", "voorwaardelijk", "aanvullende_clausule"].includes(c.status));
+  const emptyCount = allRows.filter(isEmptyRow).length;
+  const visibleRows = showEmpty || onlyUnknown ? allRows : allRows.filter((r) => !isEmptyRow(r));
+  const table = useReactTable<any>({ data: visibleRows, columns, state: { sorting, columnVisibility: visibility }, onSortingChange: setSorting, onColumnVisibilityChange: setVisibility, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
   const exp = (fmt: string) => window.open(api.url("/compare/export", { product_ids: ids.join(","), reference, fmt, level }), "_blank");
 
   return (
@@ -182,6 +194,7 @@ function MatrixView({ ids, reference, products, level }: { ids: number[]; refere
         <div className="flex items-center gap-4 rounded-[10px] border border-line px-3 py-1">
           <Switch checked={onlyDiff} onCheckedChange={setOnlyDiff} label="Alleen verschillen" />
           <Switch checked={onlyUnknown} onCheckedChange={setOnlyUnknown} label="Alleen onbekend" />
+          <Switch checked={showEmpty} onCheckedChange={setShowEmpty} label={`Onbekende kenmerken tonen${emptyCount ? ` (${emptyCount})` : ""}`} />
         </div>
         <div className="ml-auto flex gap-2">
           <Menu trigger={<Button icon={<Columns3 className="h-4 w-4" />}>Kolommen</Button>} items={table.getAllLeafColumns().map((c) => ({ label: `${c.getIsVisible() ? "✓ " : "   "}${c.id === "rubriek" ? "Rubriek" : c.id === "kenmerk" ? "Kenmerk" : (data?.products.find((p: any) => `p${p.id}` === c.id)?.provider_name ?? c.id)}`, onSelect: () => c.toggleVisibility() }))} />
