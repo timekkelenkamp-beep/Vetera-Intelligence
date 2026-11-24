@@ -12,12 +12,12 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from ..models import (DocumentDiff, Document, DocumentPage, DocumentVersion, Feature, Finding,
+from ..models import (ProductCoverage, DocumentDiff, Document, DocumentPage, DocumentVersion, Feature, Finding,
                       ImprovementSuggestion, Notification, PremiumObservation, Product, Provider,
                       ResearchDossier, SalesCard)
 from .ai_client import INT, STR, AIBlocked, arr, build_preview, obj, run_structured
 from .analysis import current_findings, local_sales_card, product_label
-from .common import FINDING_STATUSES, normalize_text
+from .common import COVERAGE_LEVELS, FINDING_STATUSES, normalize_text
 from .documents import verify_quote
 from .premiums import observation_dict
 from .settings_store import get_setting
@@ -64,7 +64,9 @@ class ContextBuilder:
         self.items[rid] = {"type": "finding", "finding_id": f.id, "document_version_id": f.document_version_id,
                            "page_number": f.page_number}
         line = (f"[{rid}] {prov.name if prov else '?'}{' (VETERA)' if prov and prov.is_reference else ''} – "
-                f"{p.name if p else '?'} – {feat.category}/{feat.label}: {FINDING_STATUSES.get(f.status, f.status)}")
+                f"{p.name if p else '?'} – {feat.category}/{feat.label}"
+                f"{' [' + COVERAGE_LEVELS[f.coverage_level] + ']' if f.coverage_level in COVERAGE_LEVELS else ''}: "
+                f"{FINDING_STATUSES.get(f.status, f.status)}")
         if f.value_text:
             line += f"; waarde: {f.value_text}"
         if f.page_number:
@@ -200,7 +202,8 @@ def build_ask_context(db: Session, question: str, consent_nonpublic: bool = Fals
         f"#{p.id} {product_label(db, p)['provider_name']} – {p.name} ({p.vehicle_category})"
         + (" [distributie van canoniek product #%d]" % p.canonical_product_id if p.canonical_product_id else "")
         for p in products) or "geen")
-    for f in current_findings(db, [p.id for p in products]).values():
+    for f in db.scalars(select(Finding).where(Finding.product_id.in_([p.id for p in products] or [0]),
+                                              Finding.is_current.is_(True))):
         if f.status != "niet_gevonden" or len(ctx.items) < 400:
             ctx.add_finding(f)
     for o in db.scalars(select(PremiumObservation).where(PremiumObservation.annual_premium.is_not(None))
@@ -240,9 +243,16 @@ Als de gegevens onvoldoende zijn, zeg dat dan in het korte antwoord en benoem we
 
 
 # ---------------------------------------------------------------- kenmerkextractie uit document
+LEVEL_ENUM = {"type": "string", "enum": ["alle", "wa", "wa_brand_diefstal", "wa_beperkt_casco", "wa_volledig_casco"]}
 EXTRACT_SCHEMA = obj({
+    "coverage_levels": arr(obj({
+        "level": {"type": "string", "enum": ["wa", "wa_brand_diefstal", "wa_beperkt_casco", "wa_volledig_casco"]},
+        "offered": {"type": "string", "enum": ["ja", "nee", "onbekend"]},
+        "local_name": STR, "page_number": INT, "quote": STR,
+    })),
     "items": arr(obj({
         "feature_key": STR,
+        "coverage_level": LEVEL_ENUM,
         "status": {"type": "string", "enum": list(FINDING_STATUSES)},
         "value_text": STR, "explanation": STR, "page_number": INT, "article": STR, "quote": STR,
         "confidence": {"type": "string", "enum": ["hoog", "middel", "laag"]},
@@ -271,7 +281,14 @@ gedekt = aantoonbaar gedekt; uitgesloten = aantoonbaar uitgesloten (alleen met e
 voorwaardelijk = gedekt onder voorwaarden; aanvullende_clausule = afhankelijk van aanvullende clausule/dekking;
 niet_gevonden = niets over gevonden; onvoldoende_informatie = wel genoemd maar niet eenduidig;
 menselijke_beoordeling = interpretatie vereist menselijke beoordeling.
-Geef voor iedere rubriek precies één item. 'quote' is een letterlijk citaat (max. 300 tekens) van de opgegeven pagina,
+Dekkingsniveaus: wa = alleen wettelijke aansprakelijkheid; wa_brand_diefstal = WA plus brand en diefstal
+(zonder verdere cascodekking); wa_beperkt_casco = WA plus beperkt casco (doorgaans brand, diefstal, storm,
+ruit, natuur); wa_volledig_casco = WA plus volledig casco/allrisk. Geef in coverage_levels per niveau aan of het
+product het aanbiedt (ja/nee/onbekend) en onder welke naam de aanbieder het noemt (bijv. 'WA Extra'), met citaat.
+Geef per rubriek één item met coverage_level 'alle' als de regeling voor alle dekkingen gelijk is (bijv. acceptatie,
+gebruik, stalling). Verschilt de regeling per dekkingsniveau (typisch bij brand, diefstal, storm, ruit, vandalisme,
+casco, eigen risico), geef dan één item per aangeboden niveau met het juiste coverage_level. Een niveau dat het
+product niet aanbiedt krijg geen items. 'quote' is een letterlijk citaat (max. 300 tekens) van de opgegeven pagina,
 of een lege string als er geen passage is. page_number is 0 als er geen passage is. Bij tekst-/bedragrubrieken
 vul je value_text met de concrete waarde (bijv. '€ 150 per gebeurtenis', 'minimaal 25 jaar oud')."""
     user = (f"Document: '{doc.title}' (type {doc.document_type}), versie {v.version_label or '-'}.\n"
@@ -283,12 +300,39 @@ vul je value_text met de concrete waarde (bijv. '€ 150 per gebeurtenis', 'mini
     data, analysis = run_structured(db, kind="extractie", system=system, user_text=user, schema=EXTRACT_SCHEMA,
                                     sent_summary=summary, max_tokens=32000)
     fkeys = {f.key: f for f in feats}
-    created, skipped_locked, downgraded, unverified = 0, 0, 0, 0
+    created, skipped_locked, downgraded, unverified, levels_set = 0, 0, 0, 0, 0
+    for cl in data.get("coverage_levels", []):
+        lv = cl.get("level")
+        if lv not in COVERAGE_LEVELS:
+            continue
+        pc = db.scalars(select(ProductCoverage).where(ProductCoverage.product_id == product_id,
+                                                      ProductCoverage.level == lv)).first()
+        if pc and pc.locked:
+            continue
+        offered = {"ja": True, "nee": False}.get(cl.get("offered"))
+        quote = (cl.get("quote") or "").strip() or None
+        if offered is False and not (quote and verify_quote(db, v.id, cl.get("page_number") or None, quote)["verified"]):
+            offered = None  # 'niet aangeboden' alleen met een passage die dat aantoont
+        if pc is None:
+            pc = ProductCoverage(product_id=product_id, level=lv)
+            db.add(pc)
+        pc.offered = offered if offered is not None else pc.offered
+        pc.local_name = (cl.get("local_name") or "").strip()[:200] or pc.local_name
+        pc.document_version_id, pc.page_number, pc.quote, pc.origin = v.id, cl.get("page_number") or None, quote, "ai"
+        levels_set += 1
+    seen_keys: set[tuple] = set()
     for it in data.get("items", []):
         f = fkeys.get(it.get("feature_key"))
         if not f:
             continue
+        level = it.get("coverage_level")
+        level = level if level in COVERAGE_LEVELS else None
+        if (f.id, level) in seen_keys:
+            continue
+        seen_keys.add((f.id, level))
         existing = db.scalars(select(Finding).where(Finding.product_id == product_id, Finding.feature_id == f.id,
+                                                    Finding.coverage_level.is_(None) if level is None
+                                                    else Finding.coverage_level == level,
                                                     Finding.is_current.is_(True))).all()
         if any(e.locked for e in existing):
             skipped_locked += 1  # menselijke correcties worden nooit overschreven
@@ -308,7 +352,8 @@ vul je value_text met de concrete waarde (bijv. '€ 150 per gebeurtenis', 'mini
             expl += " [Uitsluiting zonder geverifieerde passage omgezet naar menselijke beoordeling.]"
         for e in existing:
             e.is_current = False
-        nf = Finding(product_id=product_id, feature_id=f.id, status=status, value_text=it.get("value_text") or None,
+        nf = Finding(product_id=product_id, feature_id=f.id, coverage_level=level, status=status,
+                     value_text=it.get("value_text") or None,
                      explanation=expl.strip(), document_version_id=v.id, page_number=vq.get("page_number") or page,
                      article=it.get("article") or None, quote=quote, quote_verified=vq["verified"], origin="ai",
                      confidence=it.get("confidence"), review_status="te_beoordelen", ai_analysis_id=analysis.id)
@@ -318,7 +363,7 @@ vul je value_text met de concrete waarde (bijv. '€ 150 per gebeurtenis', 'mini
             e.superseded_by_id = nf.id
         created += 1
     analysis.validation = {"created": created, "skipped_locked": skipped_locked, "downgraded": downgraded,
-                           "unverified_quotes": unverified}
+                           "unverified_quotes": unverified, "coverage_levels": levels_set}
     db.commit()
     return {"analysis_id": analysis.id, **analysis.validation, "notes": data.get("document_notes"),
             "cost_eur": analysis.cost_estimate}
@@ -349,7 +394,7 @@ def sales_card(db: Session, vetera_id: int, competitor_id: int, dry_run: bool, u
         db.add(card); db.commit()
         return {"card_id": card.id, "content": content}
     ctx = ContextBuilder(db)
-    for f in current_findings(db, [vp.id, cp.id]).values():
+    for f in db.scalars(select(Finding).where(Finding.product_id.in_([vp.id, cp.id]), Finding.is_current.is_(True))):
         ctx.add_finding(f)
     for o in db.scalars(select(PremiumObservation).where(PremiumObservation.product_id.in_([vp.id, cp.id]))):
         ctx.add_premium(o)

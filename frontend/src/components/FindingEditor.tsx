@@ -4,13 +4,13 @@ import { CheckCircle2, Pencil, XCircle, Search, History, Lock, Unlock } from "lu
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { date } from "@/lib/utils";
-import { FINDING_STATUS } from "@/lib/labels";
+import { COVERAGE, COVERAGE_LEVELS, FINDING_STATUS } from "@/lib/labels";
 import { Dialog } from "./ui/overlay";
 import { Badge, Button, Field, Input, Notice, Select, Textarea } from "./ui/primitives";
 import { FindingStatus, OriginBadge, SourceRef, VerifiedMark } from "./common";
 
 /** Bekijk, beoordeel en corrigeer één kenmerk van één product. Menselijke invoer wordt vergrendeld. */
-export function FindingEditor({ open, onOpenChange, product, feature, finding }: { open: boolean; onOpenChange: (v: boolean) => void; product: any; feature: any; finding?: any }) {
+export function FindingEditor({ open, onOpenChange, product, feature, finding, level }: { open: boolean; onOpenChange: (v: boolean) => void; product: any; feature: any; finding?: any; level?: string }) {
   const qc = useQueryClient();
   const [mode, setMode] = React.useState<"view" | "edit">("view");
   const [f, setF] = React.useState<any>({});
@@ -22,7 +22,7 @@ export function FindingEditor({ open, onOpenChange, product, feature, finding }:
     if (open) {
       setMode(finding ? "view" : "edit");
       setPassages(null);
-      setF(finding ? { status: finding.status, value_text: finding.value_text || "", value_number: finding.value_number ?? "", explanation: finding.explanation || "", document_version_id: finding.document_version_id || "", page_number: finding.page_number || "", article: finding.article || "", quote: finding.quote || "" } : { status: "gedekt", document_version_id: "" });
+      setF(finding ? { coverage_level: finding.coverage_level || "", status: finding.status, value_text: finding.value_text || "", value_number: finding.value_number ?? "", explanation: finding.explanation || "", document_version_id: finding.document_version_id || "", page_number: finding.page_number || "", article: finding.article || "", quote: finding.quote || "" } : { status: "gedekt", document_version_id: "", coverage_level: level || "" });
     }
   }, [open, finding]);
   const refresh = () => ["matrix", "findings", "product", "cards", "finding-hist", "provider"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
@@ -33,6 +33,7 @@ export function FindingEditor({ open, onOpenChange, product, feature, finding }:
 
   const body = () => ({
     ...f,
+    coverage_level: f.coverage_level || null,
     document_version_id: f.document_version_id ? Number(f.document_version_id) : null,
     page_number: f.page_number ? Number(f.page_number) : null,
     value_number: f.value_number === "" || f.value_number === undefined ? null : Number(f.value_number),
@@ -69,7 +70,7 @@ export function FindingEditor({ open, onOpenChange, product, feature, finding }:
 
   if (!product || !feature) return null;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} size="lg" title={feature.label} description={`${product.provider_name} · ${product.name} · ${feature.category}`}
+    <Dialog open={open} onOpenChange={onOpenChange} size="lg" title={feature.label} description={`${product.provider_name} · ${product.name} · ${feature.category}${level ? ` · ${COVERAGE[level]}` : ""}`}
       footer={mode === "edit" ? (
         <><Button variant="ghost" onClick={() => (finding ? setMode("view") : onOpenChange(false))}>Annuleren</Button><Button variant="primary" onClick={save} loading={busy}>Vastleggen</Button></>
       ) : (
@@ -84,6 +85,7 @@ export function FindingEditor({ open, onOpenChange, product, feature, finding }:
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <FindingStatus status={finding.status} />
+            <Badge tone="neutral">{finding.coverage_level ? COVERAGE[finding.coverage_level] : "Alle dekkingen"}</Badge>
             <OriginBadge origin={finding.origin} review={finding.review_status} />
             {finding.locked && <Badge tone="accent"><Lock className="h-3 w-3" /> Menselijke beoordeling vergrendeld</Badge>}
             {finding.confidence && <Badge>Betrouwbaarheid {finding.confidence}</Badge>}
@@ -117,6 +119,12 @@ export function FindingEditor({ open, onOpenChange, product, feature, finding }:
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
+          <Field label="Geldt voor dekking" className="col-span-2" hint="Kies ‘Alle dekkingen’ als de regeling niet afhangt van WA, brand/diefstal, beperkt of volledig casco (bijv. acceptatie of stalling).">
+            <Select value={f.coverage_level || ""} onChange={(e) => setF({ ...f, coverage_level: e.target.value })}>
+              <option value="">Alle dekkingen</option>
+              {COVERAGE_LEVELS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </Select>
+          </Field>
           <Field label="Status" className="col-span-2">
             <Select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
               {Object.entries(FINDING_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}

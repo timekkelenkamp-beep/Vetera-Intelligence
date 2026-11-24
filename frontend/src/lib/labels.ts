@@ -35,8 +35,15 @@ export const OBS_TYPE: Record<string, string> = {
   openbare_indicatie: "Openbare indicatie", historisch_tarief: "Historisch tarief", niet_beschikbaar: "Niet beschikbaar",
 };
 export const COVERAGE: Record<string, string> = {
-  wa: "WA", wa_beperkt_casco: "WA + beperkt casco", wa_volledig_casco: "WA + volledig casco",
+  wa: "WA", wa_brand_diefstal: "WA + brand/diefstal", wa_beperkt_casco: "WA + beperkt casco", wa_volledig_casco: "WA + volledig casco",
 };
+/** Dekkingsniveaus van laag naar hoog (zelfde sleutels als bij premies en rekenprofielen). */
+export const COVERAGE_LEVELS: { key: string; label: string; short: string }[] = [
+  { key: "wa", label: "WA", short: "WA" },
+  { key: "wa_brand_diefstal", label: "WA + brand/diefstal", short: "WA + B/D" },
+  { key: "wa_beperkt_casco", label: "WA + beperkt casco", short: "Beperkt casco" },
+  { key: "wa_volledig_casco", label: "WA + volledig casco", short: "Volledig casco" },
+];
 export const PERIOD: Record<string, string> = { jaar: "per jaar", half_jaar: "per half jaar", kwartaal: "per kwartaal", maand: "per maand" };
 export const NOTIF_TYPE: Record<string, string> = {
   nieuwe_concurrent: "Nieuwe concurrent", voorwaarden_gewijzigd: "Voorwaarden gewijzigd", premieverschil: "Premieverschil",

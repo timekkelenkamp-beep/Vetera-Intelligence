@@ -108,6 +108,7 @@ De knop *Automatisch* weigert en logt dit zolang er geen toegestane, gebouwde co
 | Automatisch onderzoek per aanbieder: AI-webonderzoek beperkt tot het officiële domein, server haalt pagina's en PDF's op (robots.txt), premie-indicaties alleen als het bedrag letterlijk op de pagina staat, gebruiker kiest wat wordt geïmporteerd, daarna optioneel AI-analyse van alle nieuwe documenten | Gereed | A (gesimuleerde AI en website), X (echte websites) |
 | Opzoeken op naam: naam invullen → officiële website opzoeken → website doorzoeken → importeren → logo → optioneel AI-analyse, als achtergrondtaak met voortgang | Gereed | A (gesimuleerde AI), X (echte websites) |
 | Lange acties (onderzoek, importeren, analyseren) als achtergrondtaak, zodat de hostingdienst geen time-out (502) geeft | Gereed | A |
+| Vergelijken per dekkingsniveau (WA, WA + brand/diefstal, beperkt casco, volledig casco): bevindingen per niveau of voor alle dekkingen, per product welke niveaus worden aangeboden en onder welke naam, AI-analyse per niveau, scores volgens de dekking van het rekenprofiel | Gereed | A, H |
 | Snelzoeken (Ctrl+K / ⌘K) over aanbieders, producten, documenten, clausules en volledige tekst | Gereed | A |
 
 ---

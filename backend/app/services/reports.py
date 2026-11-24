@@ -50,8 +50,9 @@ def _reference(db: Session, products: list[Product]) -> Product | None:
     return None
 
 
-def _matrix_section(db: Session, products: list[Product], ref: Product | None, sources: list) -> tuple[dict, list[str]]:
-    m = matrix(db, [p.id for p in products], ref.id if ref else None)
+def _matrix_section(db: Session, products: list[Product], ref: Product | None, sources: list,
+                    level: str | None = None) -> tuple[dict, list[str]]:
+    m = matrix(db, [p.id for p in products], ref.id if ref else None, level=level)
     cols = ["Rubriek", "Kenmerk"] + [f"{p['provider_name']} – {p['name']}" for p in m["products"]]
     rows, summary = [], []
     diffs_comp, diffs_ref = 0, 0

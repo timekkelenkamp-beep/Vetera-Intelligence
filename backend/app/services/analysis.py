@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import (Document, DocumentVersion, Feature, Finding, ImprovementSuggestion, Product,
-                      Provider, ScoreProfile)
-from .common import FINDING_STATUSES, KNOWN_STATUSES, to_dict
+                      ProductCoverage, Provider, ReferenceProfile, ScoreProfile)
+from .common import COVERAGE_LEVELS, FINDING_STATUSES, KNOWN_STATUSES, LEVEL_ORDER, to_dict
 from .premiums import compare_profile
 
 STATUS_RANK = {"gedekt": 3, "voorwaardelijk": 2, "aanvullende_clausule": 2, "uitgesloten": 0}
@@ -26,16 +26,49 @@ ASPECT_GROUPS = {
 }
 
 
-def current_findings(db: Session, product_ids: list[int]) -> dict[tuple[int, int], Finding]:
+def current_findings(db: Session, product_ids: list[int], level: str | None = None) -> dict[tuple[int, int], Finding]:
+    """Actuele bevinding per (product, kenmerk) voor een dekkingsniveau.
+
+    - Met ``level``: een bevinding specifiek voor dat niveau gaat voor; anders de bevinding die voor alle
+      dekkingen geldt. Bevindingen van andere niveaus tellen niet mee.
+    - Zonder ``level``: de bevinding die voor alle dekkingen geldt, anders die van het hoogste niveau
+      (het ruimste dat het product biedt).
+    Binnen dezelfde keuze hebben menselijk vastgezette bevindingen voorrang, daarna de nieuwste."""
     rows = db.scalars(select(Finding).where(Finding.product_id.in_(product_ids), Finding.is_current.is_(True))).all()
+
+    def rank(f: Finding) -> tuple:
+        if level:
+            lv = 2 if f.coverage_level == level else 1 if f.coverage_level is None else -1
+        else:
+            lv = 10 if f.coverage_level is None else LEVEL_ORDER.index(f.coverage_level) + 1 \
+                if f.coverage_level in LEVEL_ORDER else 0
+        return (lv, 1 if f.locked else 0, f.id)
+
     out: dict[tuple[int, int], Finding] = {}
     for f in rows:
+        r = rank(f)
+        if r[0] < 0:
+            continue
         key = (f.product_id, f.feature_id)
-        prev = out.get(key)
-        # Menselijk vastgezette bevindingen hebben voorrang
-        if prev is None or (f.locked and not prev.locked) or (f.locked == prev.locked and f.id > prev.id):
+        if key not in out or r > rank(out[key]):
             out[key] = f
     return out
+
+
+def coverage_map(db: Session, product_ids: list[int]) -> dict[int, dict[str, ProductCoverage]]:
+    out: dict[int, dict[str, ProductCoverage]] = defaultdict(dict)
+    for c in db.scalars(select(ProductCoverage).where(ProductCoverage.product_id.in_(product_ids))):
+        out[c.product_id][c.level] = c
+    return out
+
+
+def level_info(db: Session, product_id: int, level: str | None, cmap: dict | None = None) -> dict | None:
+    """Of een product een dekkingsniveau aanbiedt, en onder welke naam."""
+    if not level:
+        return None
+    c = (cmap if cmap is not None else coverage_map(db, [product_id])).get(product_id, {}).get(level)
+    return {"level": level, "offered": c.offered if c else None, "local_name": c.local_name if c else None,
+            "document_version_id": c.document_version_id if c else None, "page_number": c.page_number if c else None}
 
 
 def finding_dict(db: Session, f: Finding | None) -> dict | None:
@@ -100,25 +133,30 @@ def explain_difference(feature: Feature, ref: Finding | None, other: Finding | N
 
 def matrix(db: Session, product_ids: list[int], reference_product_id: int | None = None,
            category: str | None = None, only_differences: bool = False, only_unknown: bool = False,
-           search: str | None = None) -> dict:
+           search: str | None = None, level: str | None = None) -> dict:
+    level = level if level in COVERAGE_LEVELS else None
     products = [p for p in (db.get(Product, i) for i in product_ids) if p]
     ids = [p.id for p in products]
     q = select(Feature).where(Feature.active.is_(True)).order_by(Feature.sort_order)
     if category:
         q = q.where(Feature.category == category)
     features = db.scalars(q).all()
-    fmap = current_findings(db, ids)
+    fmap = current_findings(db, ids, level)
     ref = db.get(Product, reference_product_id) if reference_product_id else None
-    labels = {p.id: product_label(db, p) for p in products}
+    cmap = coverage_map(db, ids)
+    labels = {p.id: {**product_label(db, p), "level_info": level_info(db, p.id, level, cmap),
+                     "levels": {lv: {"offered": c.offered, "local_name": c.local_name} for lv, c in cmap.get(p.id, {}).items()}}
+              for p in products}
+    not_offered = {pid for pid, lb in labels.items() if lb["level_info"] and lb["level_info"]["offered"] is False}
     rows = []
     s = (search or "").lower().strip()
     for feat in features:
         cells = {}
         diffs = {}
         for p in products:
-            f = fmap.get((p.id, feat.id))
+            f = None if p.id in not_offered else fmap.get((p.id, feat.id))
             cells[str(p.id)] = finding_dict(db, f)
-            if ref and p.id != ref.id:
+            if ref and p.id != ref.id and p.id not in not_offered and ref.id not in not_offered:
                 d = explain_difference(feat, fmap.get((ref.id, feat.id)), f, labels[ref.id]["provider_name"],
                                        labels[p.id]["provider_name"])
                 if d:
@@ -139,17 +177,18 @@ def matrix(db: Session, product_ids: list[int], reference_product_id: int | None
         rows.append({"feature": to_dict(feat), "cells": cells, "differences": diffs,
                      "has_unknown": has_unknown, "is_difference": is_diff})
     return {"products": [labels[i] for i in ids], "reference_product_id": ref.id if ref else None,
-            "rows": rows, "categories": sorted({f.category for f in db.scalars(select(Feature))},
+            "level": level, "coverage_levels": COVERAGE_LEVELS, "rows": rows, "categories": sorted({f.category for f in db.scalars(select(Feature))},
                                                key=lambda c: ["Acceptatie", "Gebruik", "Verzekerde waarde", "Dekkingen",
                                                               "Eigen risico", "Collecties"].index(c)
                                                if c in ["Acceptatie", "Gebruik", "Verzekerde waarde", "Dekkingen",
                                                         "Eigen risico", "Collecties"] else 99)}
 
 
-def product_summary(db: Session, product: Product, reference: Product | None) -> dict:
+def product_summary(db: Session, product: Product, reference: Product | None, level: str | None = None) -> dict:
     """Kaartweergave: aantoonbare voor- en nadelen t.o.v. de referentie en datastatus."""
+    level = level if level in COVERAGE_LEVELS else None
     ids = [product.id] + ([reference.id] if reference and reference.id != product.id else [])
-    fmap = current_findings(db, ids)
+    fmap = current_findings(db, ids, level)
     features = db.scalars(select(Feature).where(Feature.active.is_(True)).order_by(Feature.sort_order)).all()
     known = sum(1 for f in features if (fm := fmap.get((product.id, f.id))) and fm.status in KNOWN_STATUSES)
     verified = sum(1 for f in features if (fm := fmap.get((product.id, f.id))) and fm.review_status in ("goedgekeurd", "gecorrigeerd"))
@@ -166,7 +205,8 @@ def product_summary(db: Session, product: Product, reference: Product | None) ->
                 adv.append({"feature": f.label, "text": d["text"], "finding_id": mine.id if mine else None})
             elif d and d["kind"] == "referentie_ruimer":
                 disadv.append({"feature": f.label, "text": d["text"], "finding_id": mine.id if mine else None})
-    return {**pl, "features_total": len(features), "features_known": known, "features_verified": verified,
+    return {**pl, "level_info": level_info(db, product.id, level), "features_total": len(features),
+            "features_known": known, "features_verified": verified,
             "data_status": "onvoldoende" if known < len(features) * 0.3 else "gedeeltelijk"
             if known < len(features) * 0.8 else "goed",
             "highlights": highlights, "advantages": adv[:6], "disadvantages": disadv[:6]}
@@ -175,12 +215,16 @@ def product_summary(db: Session, product: Product, reference: Product | None) ->
 # ---------------------------------------------------------------- scores
 def compute_scores(db: Session, score_profile: ScoreProfile, product_ids: list[int],
                    overrides: dict[tuple[int, int], str] | None = None,
-                   premium_overrides: dict[int, float] | None = None) -> dict:
+                   premium_overrides: dict[int, float] | None = None, level: str | None = None) -> dict:
     """Bereken scores. ``overrides`` en ``premium_overrides`` maken een hypothetisch scenario
     (wat-als) mogelijk zonder iets op te slaan."""
     weights = {k: float(v) for k, v in (score_profile.weights or {}).items() if float(v) > 0}
     features = db.scalars(select(Feature).where(Feature.active.is_(True))).all()
-    fmap = dict(current_findings(db, product_ids))
+    if level is None and score_profile.reference_profile_id:
+        prof = db.get(ReferenceProfile, score_profile.reference_profile_id)
+        level = prof.coverage if prof and prof.coverage in COVERAGE_LEVELS else None
+    level = level if level in COVERAGE_LEVELS else None
+    fmap = dict(current_findings(db, product_ids, level))
     for (pid, fid), status in (overrides or {}).items():
         fmap[(pid, fid)] = Finding(product_id=pid, feature_id=fid, status=status, review_status="hypothetisch")
     premium_info: dict[int, dict] = {}
@@ -244,7 +288,7 @@ def compute_scores(db: Session, score_profile: ScoreProfile, product_ids: list[i
                         "missing_aspects": missing,
                         "total_note": None if total is not None else
                         "Geen totaalscore: niet alle gewogen aspecten zijn betrouwbaar te bepalen."})
-    return {"score_profile": to_dict(score_profile), "results": results,
+    return {"score_profile": to_dict(score_profile), "results": results, "level": level,
             "method": "Per aspect: gemiddelde van statuskenmerken (gedekt = 100, voorwaardelijk/aanvullende "
                       "clausule = 50, uitgesloten = 0). Onbekende kenmerken tellen niet mee; een aspect krijgt "
                       "alleen een score bij voldoende bekende kenmerken. Premie: laagste vergelijkbare totale "
@@ -252,9 +296,9 @@ def compute_scores(db: Session, score_profile: ScoreProfile, product_ids: list[i
 
 
 # ---------------------------------------------------------------- lokale verkoopargumenten
-def local_sales_card(db: Session, vetera: Product, competitor: Product) -> dict:
+def local_sales_card(db: Session, vetera: Product, competitor: Product, level: str | None = None) -> dict:
     feats = db.scalars(select(Feature).where(Feature.active.is_(True)).order_by(Feature.sort_order)).all()
-    fmap = current_findings(db, [vetera.id, competitor.id])
+    fmap = current_findings(db, [vetera.id, competitor.id], level if level in COVERAGE_LEVELS else None)
     vl, cl = product_label(db, vetera), product_label(db, competitor)
     args, comp_strengths, unknown = [], [], []
     for f in feats:

@@ -25,6 +25,15 @@ FINDING_STATUSES = {
 }
 KNOWN_STATUSES = {"gedekt", "uitgesloten", "voorwaardelijk", "aanvullende_clausule"}
 
+# Dekkingsniveaus van laag naar hoog. Dezelfde sleutels als de dekkingsvariant bij premies en rekenprofielen.
+COVERAGE_LEVELS = {
+    "wa": "WA",
+    "wa_brand_diefstal": "WA + brand/diefstal",
+    "wa_beperkt_casco": "WA + beperkt casco",
+    "wa_volledig_casco": "WA + volledig casco",
+}
+LEVEL_ORDER = list(COVERAGE_LEVELS)
+
 OBSERVATION_TYPES = {
     "geverifieerd_tarief": "Geverifieerd tarief",
     "proefberekening": "Vastgelegde proefberekening",

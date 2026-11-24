@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import Feature, Finding, Product, Provider, ScoreProfile
 from ..services.analysis import compute_scores, finding_dict, matrix, product_summary
-from ..services.common import FINDING_STATUSES, apply_updates, audit, get_or_404, to_dict
+from ..services.common import COVERAGE_LEVELS, FINDING_STATUSES, apply_updates, audit, get_or_404, to_dict
 from ..services.documents import verify_quote
 from ..services.reports import _matrix_section, render_pdf, render_xlsx, STANDARD_LIMITATIONS
 
@@ -96,11 +96,15 @@ def create_finding(data: dict, db: Session = Depends(get_db)):
     _validate_finding(data)
     get_or_404(db, Product, int(data.get("product_id") or 0), "Product")
     get_or_404(db, Feature, int(data.get("feature_id") or 0), "Kenmerk")
+    level = data.get("coverage_level") or None
+    if level and level not in COVERAGE_LEVELS:
+        raise HTTPException(422, "Onbekend dekkingsniveau")
     old = db.scalars(select(Finding).where(Finding.product_id == data["product_id"], Finding.feature_id == data["feature_id"],
+                                           Finding.coverage_level.is_(None) if level is None else Finding.coverage_level == level,
                                            Finding.is_current.is_(True))).all()
     f = Finding(product_id=int(data["product_id"]), feature_id=int(data["feature_id"]), origin="handmatig",
-                review_status="goedgekeurd", locked=True)
-    for k in ("status", "value_text", "value_number", "explanation", "document_version_id", "page_number", "article", "quote"):
+                review_status="goedgekeurd", locked=True, coverage_level=level)
+    for k in ("status", "value_text", "value_number", "explanation", "document_version_id", "page_number", "article", "quote"):  # noqa: E501
         if k in data:
             setattr(f, k, data[k] if data[k] != "" else None)
     f.status = f.status or "menselijke_beoordeling"
@@ -132,8 +136,11 @@ def review_finding(fid: int, data: dict, db: Session = Depends(get_db)):
         audit(db, "finding", f.id, "ontgrendeld")
     elif action == "corrigeren":
         _validate_finding(data)
+        new_level = data.get("coverage_level", f.coverage_level) or None
+        if new_level and new_level not in COVERAGE_LEVELS:
+            raise HTTPException(422, "Onbekend dekkingsniveau")
         nf = Finding(product_id=f.product_id, feature_id=f.feature_id, origin="handmatig", review_status="gecorrigeerd",
-                     locked=True, status=f.status, value_text=f.value_text, value_number=f.value_number,
+                     locked=True, coverage_level=new_level, status=f.status, value_text=f.value_text, value_number=f.value_number,
                      explanation=f.explanation, document_version_id=f.document_version_id, page_number=f.page_number,
                      article=f.article, quote=f.quote, quote_verified=f.quote_verified, confidence="hoog")
         changes = {}
@@ -170,7 +177,9 @@ def verify_finding(fid: int, db: Session = Depends(get_db)):
 @router.get("/findings/{fid}/history")
 def finding_history(fid: int, db: Session = Depends(get_db)):
     f = get_or_404(db, Finding, fid, "Bevinding")
-    rows = db.scalars(select(Finding).where(Finding.product_id == f.product_id, Finding.feature_id == f.feature_id)
+    rows = db.scalars(select(Finding).where(Finding.product_id == f.product_id, Finding.feature_id == f.feature_id,
+                                            Finding.coverage_level.is_(None) if f.coverage_level is None
+                                            else Finding.coverage_level == f.coverage_level)
                       .order_by(Finding.created_at.desc())).all()
     return [finding_dict(db, x) for x in rows]
 
@@ -179,26 +188,30 @@ def finding_history(fid: int, db: Session = Depends(get_db)):
 @router.get("/compare/matrix")
 def compare_matrix(product_ids: str, reference: int | None = None, category: str | None = None,
                    only_differences: bool = False, only_unknown: bool = False, q: str | None = None,
-                   db: Session = Depends(get_db)):
-    return matrix(db, _ids(product_ids), reference, category, only_differences, only_unknown, q)
+                   level: str | None = None, db: Session = Depends(get_db)):
+    return matrix(db, _ids(product_ids), reference, category, only_differences, only_unknown, q, level)
 
 
 @router.get("/compare/cards")
-def compare_cards(product_ids: str | None = None, reference: int | None = None, db: Session = Depends(get_db)):
+def compare_cards(product_ids: str | None = None, reference: int | None = None, level: str | None = None,
+                  db: Session = Depends(get_db)):
     ids = _ids(product_ids)
     products = [db.get(Product, i) for i in ids] if ids else db.scalars(
         select(Product).join(Provider, Product.provider_id == Provider.id).where(Provider.status == "actief")).all()
     ref = db.get(Product, reference) if reference else None
-    return [product_summary(db, p, ref) for p in products if p]
+    return [product_summary(db, p, ref, level) for p in products if p]
 
 
 @router.get("/compare/export")
-def compare_export(product_ids: str, reference: int | None = None, fmt: str = "xlsx", db: Session = Depends(get_db)):
+def compare_export(product_ids: str, reference: int | None = None, fmt: str = "xlsx", level: str | None = None,
+                   db: Session = Depends(get_db)):
     products = [p for p in (db.get(Product, i) for i in _ids(product_ids)) if p]
     if not products:
         raise HTTPException(422, "Selecteer minimaal één product")
     sources: list[str] = []
-    sec, summary = _matrix_section(db, products, db.get(Product, reference) if reference else None, sources)
+    sec, summary = _matrix_section(db, products, db.get(Product, reference) if reference else None, sources, level)
+    if level in COVERAGE_LEVELS:
+        sec["heading"] += f" – {COVERAGE_LEVELS[level]}"
     content = {"title": "Voorwaardenvergelijking", "type_label": "Voorwaardenanalyse", "date": date.today().isoformat(),
                "products": [f"{db.get(Provider, p.provider_id).name} – {p.name}" for p in products],
                "management_summary": summary, "sections": [sec], "sources": sources, "limitations": STANDARD_LIMITATIONS}

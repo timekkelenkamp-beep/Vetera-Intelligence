@@ -40,6 +40,8 @@ export const api = {
     fetch(`/api${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) }).then((r) => handle<T>(r)),
   patch: <T = any>(path: string, body: any) =>
     fetch(`/api${path}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => handle<T>(r)),
+  put: <T = any>(path: string, body: any) =>
+    fetch(`/api${path}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => handle<T>(r)),
   del: <T = any>(path: string) => fetch(`/api${path}`, { method: "DELETE" }).then((r) => handle<T>(r)),
   upload: <T = any>(path: string, form: FormData) => fetch(`/api${path}`, { method: "POST", body: form }).then((r) => handle<T>(r)),
   url: (path: string, params?: Record<string, any>) => `/api${path}${qs(params)}`,

@@ -5,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Document, PremiumObservation, Product, ProductVersion, Provider, RiskCarrier
+from ..models import Document, PremiumObservation, Product, ProductCoverage, ProductVersion, Provider, RiskCarrier
 from ..services.analysis import product_label, product_summary
-from ..services.common import VEHICLE_CATEGORIES, apply_updates, audit, get_or_404, to_dict
+from ..services.common import COVERAGE_LEVELS, VEHICLE_CATEGORIES, apply_updates, audit, get_or_404, to_dict
 
 router = APIRouter(prefix="/api", tags=["producten"])
 FIELDS = ["name", "vehicle_category", "description", "url", "status", "notes", "risk_carrier_id",
@@ -69,6 +69,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     d["distributions"] = [product_label(db, x) for x in db.scalars(select(Product).where(Product.canonical_product_id == p.id))]
     d["canonical"] = product_label(db, db.get(Product, p.canonical_product_id)) if p.canonical_product_id else None
     d["risk_carrier"] = to_dict(p.risk_carrier) if p.risk_carrier else None
+    d["coverages"] = _coverages(db, p.id)
     d["premium_count"] = len(db.scalars(select(PremiumObservation.id).where(PremiumObservation.product_id == p.id)).all())
     return d
 
@@ -122,3 +123,44 @@ def create_carrier(data: dict, db: Session = Depends(get_db)):
     db.add(r)
     db.commit()
     return to_dict(r)
+
+
+def _coverages(db: Session, product_id: int) -> list[dict]:
+    have = {c.level: c for c in db.scalars(select(ProductCoverage).where(ProductCoverage.product_id == product_id))}
+    out = []
+    for lv, label in COVERAGE_LEVELS.items():
+        c = have.get(lv)
+        out.append({"level": lv, "label": label, "offered": c.offered if c else None,
+                    "local_name": c.local_name if c else None, "origin": c.origin if c else None,
+                    "locked": c.locked if c else False, "document_version_id": c.document_version_id if c else None,
+                    "page_number": c.page_number if c else None, "quote": c.quote if c else None})
+    return out
+
+
+@router.get("/products/{product_id}/coverages")
+def get_coverages(product_id: int, db: Session = Depends(get_db)):
+    get_or_404(db, Product, product_id, "Product")
+    return _coverages(db, product_id)
+
+
+@router.put("/products/{product_id}/coverages/{level}")
+def set_coverage(product_id: int, level: str, data: dict, db: Session = Depends(get_db)):
+    """Handmatig vastleggen welke dekkingsniveaus het product biedt (wordt niet door AI overschreven)."""
+    get_or_404(db, Product, product_id, "Product")
+    if level not in COVERAGE_LEVELS:
+        raise HTTPException(422, "Onbekend dekkingsniveau")
+    c = db.scalars(select(ProductCoverage).where(ProductCoverage.product_id == product_id,
+                                                 ProductCoverage.level == level)).first()
+    if c is None:
+        c = ProductCoverage(product_id=product_id, level=level)
+        db.add(c)
+    if "offered" in data:
+        c.offered = data["offered"] if data["offered"] in (True, False) else None
+    if "local_name" in data:
+        c.local_name = (data["local_name"] or "").strip()[:200] or None
+    c.origin, c.locked = "handmatig", True
+    db.flush()
+    audit(db, "product_coverage", c.id, "bijgewerkt", {"product": product_id, "niveau": level, "aangeboden": c.offered,
+                                                       "naam": c.local_name})
+    db.commit()
+    return _coverages(db, product_id)

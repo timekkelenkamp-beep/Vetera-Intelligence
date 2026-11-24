@@ -230,6 +230,9 @@ class Finding(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
     feature_id: Mapped[int] = mapped_column(ForeignKey("features.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(40), default="menselijke_beoordeling")
+    # Dekkingsniveau waarvoor de bevinding geldt (wa | wa_brand_diefstal | wa_beperkt_casco | wa_volledig_casco);
+    # leeg = geldt voor alle dekkingen van het product.
+    coverage_level: Mapped[str | None] = mapped_column(String(30), index=True)
     value_text: Mapped[str | None] = mapped_column(Text)
     value_number: Mapped[float | None] = mapped_column(Float)
     explanation: Mapped[str | None] = mapped_column(Text)
@@ -535,3 +538,19 @@ class Job(Base):
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class ProductCoverage(TimestampMixin, Base):
+    """Welke dekkingsniveaus een product aanbiedt, met de eigen naam die de aanbieder gebruikt."""
+    __tablename__ = "product_coverages"
+    __table_args__ = (UniqueConstraint("product_id", "level"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    level: Mapped[str] = mapped_column(String(30))
+    offered: Mapped[bool | None] = mapped_column(Boolean)  # None = onbekend
+    local_name: Mapped[str | None] = mapped_column(String(200))
+    document_version_id: Mapped[int | None] = mapped_column(ForeignKey("document_versions.id", ondelete="SET NULL"))
+    page_number: Mapped[int | None] = mapped_column(Integer)
+    quote: Mapped[str | None] = mapped_column(Text)
+    origin: Mapped[str] = mapped_column(String(20), default="handmatig")  # handmatig|ai
+    locked: Mapped[bool] = mapped_column(Boolean, default=False)

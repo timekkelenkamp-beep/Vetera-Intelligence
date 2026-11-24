@@ -81,21 +81,21 @@ def run_checks(db: Session, include_resolved: bool = False) -> dict:
     # Tegenstrijdige bevindingen
     cur = defaultdict(list)
     for f in db.scalars(select(Finding).where(Finding.is_current.is_(True))):
-        cur[(f.product_id, f.feature_id)].append(f)
+        cur[(f.product_id, f.feature_id, f.coverage_level)].append(f)
     feats = {f.id: f for f in db.scalars(select(Feature))}
-    for (pid, fid), fs in cur.items():
+    for (pid, fid, _lv), fs in cur.items():
         sts = {f.status for f in fs if f.status in KNOWN_STATUSES}
         if len(sts) > 1:
             p = db.get(Product, pid)
-            issues.append(_issue(f"conflict:{pid}:{fid}", "tegenstrijdig", "hoog",
+            issues.append(_issue(f"conflict:{pid}:{fid}:{_lv or 'alle'}", "tegenstrijdig", "hoog",
                                  f"Tegenstrijdige bevindingen: {p.name if p else pid} – {feats[fid].label}",
                                  "Meerdere actuele bevindingen met verschillende status.", f"/voorwaarden?product={pid}",
                                  "finding", fs[0].id))
     # Gedeelde (canonieke) producten met verschillende uitkomst
     for p in db.scalars(select(Product).where(Product.canonical_product_id.is_not(None))):
         for fid in feats:
-            a = [f for f in cur.get((p.id, fid), []) if f.status in KNOWN_STATUSES]
-            b = [f for f in cur.get((p.canonical_product_id, fid), []) if f.status in KNOWN_STATUSES]
+            a = [f for f in cur.get((p.id, fid, None), []) if f.status in KNOWN_STATUSES]
+            b = [f for f in cur.get((p.canonical_product_id, fid, None), []) if f.status in KNOWN_STATUSES]
             if a and b and a[0].status != b[0].status:
                 issues.append(_issue(f"canon:{p.id}:{fid}", "tegenstrijdig", "middel",
                                      f"Tegenstrijdige bronnen voor hetzelfde product: {p.name} – {feats[fid].label}",

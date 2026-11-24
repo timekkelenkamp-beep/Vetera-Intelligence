@@ -330,6 +330,7 @@ def local_candidate_findings(db: Session, product_id: int, version: DocumentVers
     for feature in db.scalars(select(Feature).where(Feature.active.is_(True))):
         current = db.scalars(select(Finding).where(Finding.product_id == product_id,
                                                    Finding.feature_id == feature.id,
+                                                   Finding.coverage_level.is_(None),
                                                    Finding.is_current.is_(True))).all()
         if any(f.locked or f.origin in ("handmatig", "ai") for f in current):
             skipped += 1

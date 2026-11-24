@@ -11,6 +11,7 @@ import { PositioningView, WhatIfView } from "@/components/InsightViews";
 import { FindingStatus, ProviderLogo, SourceRef, VerifiedMark, useDebounced } from "@/components/common";
 import { FindingEditor } from "@/components/FindingEditor";
 import { useProducts } from "@/components/forms";
+import { COVERAGE, COVERAGE_LEVELS } from "@/lib/labels";
 import { Dialog, Menu } from "@/components/ui/overlay";
 import { Badge, Button, Card, EmptyState, Input, Loading, Notice, PageHeader, Segmented, Select, Switch, Tip } from "@/components/ui/primitives";
 
@@ -22,6 +23,8 @@ export default function Conditions() {
   const [view, setView] = React.useState<View>((params.get("view") as View) || "tabel");
   const [selected, setSelected] = React.useState<number[]>([]);
   const [reference, setReference] = React.useState<number | null>(null);
+  const level = params.get("level") || "";
+  const setLevel = (v: string) => setParams((p) => { if (v) p.set("level", v); else p.delete("level"); return p; });
 
   React.useEffect(() => {
     if (!all.data) return;
@@ -71,11 +74,18 @@ export default function Conditions() {
               </Select>
               {!all.data.some((p) => p.is_reference) && <span className="text-[12px] text-caution">Leg eerst het Vetera-product vast om als referentie te gebruiken.</span>}
             </div>
+            {(view === "tabel" || view === "kaarten") && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
+                <span className="text-[12.5px] font-medium text-ink-muted">Dekking</span>
+                <Segmented value={level || "alle"} onChange={(v) => setLevel(v === "alle" ? "" : v)} options={[{ value: "alle", label: "Alle dekkingen" }, ...COVERAGE_LEVELS.map((c) => ({ value: c.key, label: c.short }))]} />
+                <span className="text-[12px] text-ink-muted">{level ? `Vergelijking voor ${COVERAGE[level]}. Regels die voor alle dekkingen gelden tellen ook mee.` : "Kies een dekkingsniveau om WA, brand/diefstal, beperkt en volledig casco apart te vergelijken."}</span>
+              </div>
+            )}
           </Card>
           {view === "positionering" ? <PositioningView /> : view === "watals" ? <WhatIfView products={all.data} /> :
             selected.length === 0 ? <Card><EmptyState title="Selecteer producten" /></Card> :
-            view === "tabel" ? <MatrixView ids={selected} reference={reference} products={all.data} /> :
-            view === "kaarten" ? <CardsView ids={selected} reference={reference} /> : <ScoresView ids={selected} />}
+            view === "tabel" ? <MatrixView ids={selected} reference={reference} products={all.data} level={level} /> :
+            view === "kaarten" ? <CardsView ids={selected} reference={reference} level={level} /> : <ScoresView ids={selected} />}
         </>
       )}
     </div>
@@ -90,7 +100,7 @@ const STATUS_TINT: Record<string, string> = {
   aanvullende_clausule: "bg-[#ecf3fc]", menselijke_beoordeling: "bg-[#f5f2ff]",
 };
 
-function MatrixView({ ids, reference, products }: { ids: number[]; reference: number | null; products: any[] }) {
+function MatrixView({ ids, reference, products, level }: { ids: number[]; reference: number | null; products: any[]; level: string }) {
   const [category, setCategory] = React.useState("");
   const [onlyDiff, setOnlyDiff] = React.useState(false);
   const [onlyUnknown, setOnlyUnknown] = React.useState(false);
@@ -101,8 +111,8 @@ function MatrixView({ ids, reference, products }: { ids: number[]; reference: nu
   const [visibility, setVisibility] = React.useState<VisibilityState>({ rubriek: false });
   const [edit, setEdit] = React.useState<any>(null);
   const { data, isFetching } = useQuery({
-    queryKey: ["matrix", ids, reference, category, onlyDiff, onlyUnknown, dq],
-    queryFn: () => api.get("/compare/matrix", { product_ids: ids.join(","), reference, category, only_differences: onlyDiff, only_unknown: onlyUnknown, q: dq }),
+    queryKey: ["matrix", ids, reference, category, onlyDiff, onlyUnknown, dq, level],
+    queryFn: () => api.get("/compare/matrix", { product_ids: ids.join(","), reference, category, only_differences: onlyDiff, only_unknown: onlyUnknown, q: dq, level }),
     placeholderData: (p) => p,
   });
   const prodMap = Object.fromEntries(products.map((p) => [p.id, p]));
@@ -116,6 +126,7 @@ function MatrixView({ ids, reference, products }: { ids: number[]; reference: nu
       cols.push(ch.display({
         id: `p${p.id}`,
         header: () => (
+          <>
           <div className="flex items-center gap-2">
             <ProviderLogo name={p.provider_name} logoUrl={p.logo} size={22} id={p.provider_id} isReference={p.is_reference} />
             <div className="min-w-0 leading-tight">
@@ -124,6 +135,12 @@ function MatrixView({ ids, reference, products }: { ids: number[]; reference: nu
             </div>
             {p.id === data.reference_product_id && <Badge tone="accent">Ref.</Badge>}
           </div>
+          {p.level_info && (
+            <div className="mt-1 pl-[30px] text-[11px] font-normal">
+              {p.level_info.offered === false ? <Badge tone="neutral">Niet aangeboden</Badge> : p.level_info.local_name ? <span className="text-ink-muted">Heet hier: “{p.level_info.local_name}”</span> : p.level_info.offered === null ? <span className="text-ink-faint">Aanbod onbekend</span> : null}
+            </div>
+          )}
+          </>
         ),
         size: 230,
         cell: (c: any) => {
@@ -134,6 +151,8 @@ function MatrixView({ ids, reference, products }: { ids: number[]; reference: nu
             <button onClick={() => setEdit({ product: prodMap[p.id] || p, feature: r.feature, finding: cell })} className={cn("block w-full rounded-[10px] p-2 -m-1 text-left transition-all hover:brightness-[0.97] hover:shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)]", STATUS_TINT[cell?.status] || "hover:bg-surface")}>
               <div className="flex items-center gap-1.5"><FindingStatus status={cell?.status} compact /><VerifiedMark verified={cell?.quote_verified} />{cell && cell.review_status === "te_beoordelen" && cell.origin !== "handmatig" && <Tip content="Nog niet door een mens gecontroleerd"><span className="h-1.5 w-1.5 rounded-full bg-[#5b3fb5]" /></Tip>}</div>
               {cell?.value_text && <div className="mt-1 line-clamp-2 text-[12px] text-ink-soft">{cell.value_text}</div>}
+              {cell && (level ? cell.coverage_level === null && <div className="mt-0.5 text-[10.5px] text-ink-faint">geldt voor alle dekkingen</div> : cell.coverage_level && <div className="mt-0.5 text-[10.5px] text-ink-faint">bij {COVERAGE[cell.coverage_level]}</div>)}
+              {!cell && p.level_info?.offered === false && <div className="text-[11.5px] text-ink-faint">Dekking niet aangeboden</div>}
               {cell?.document_version_id && <div className="mt-0.5"><SourceRef versionId={cell.document_version_id} page={cell.page_number} article={cell.article} quote={cell.quote} className="-ml-1.5" /></div>}
               {diff && diff.kind !== "onzeker" && (
                 <div className={cn("mt-1 text-[11.5px] leading-snug", diff.kind === "concurrent_ruimer" ? "text-caution" : diff.kind === "referentie_ruimer" ? "text-accent" : "text-ink-muted")}>{diff.text}</div>
@@ -147,7 +166,7 @@ function MatrixView({ ids, reference, products }: { ids: number[]; reference: nu
   }, [data]); // eslint-disable-line
 
   const table = useReactTable<any>({ data: data?.rows || [], columns, state: { sorting, columnVisibility: visibility }, onSortingChange: setSorting, onColumnVisibilityChange: setVisibility, getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel() });
-  const exp = (fmt: string) => window.open(api.url("/compare/export", { product_ids: ids.join(","), reference, fmt }), "_blank");
+  const exp = (fmt: string) => window.open(api.url("/compare/export", { product_ids: ids.join(","), reference, fmt, level }), "_blank");
 
   return (
     <>
@@ -204,15 +223,15 @@ function MatrixView({ ids, reference, products }: { ids: number[]; reference: nu
         </div>
       </Card>
       <p className="mt-3 flex items-center gap-1.5 text-[12px] text-ink-muted"><Info className="h-3.5 w-3.5" /> Klik op een cel om de bevinding te bekijken, goed te keuren of te corrigeren. ‘Niet gevonden’ betekent niet ‘niet verzekerd’.</p>
-      <FindingEditor open={!!edit} onOpenChange={(v) => !v && setEdit(null)} product={edit?.product} feature={edit?.feature} finding={edit?.finding} />
+      <FindingEditor open={!!edit} onOpenChange={(v) => !v && setEdit(null)} product={edit?.product} feature={edit?.feature} finding={edit?.finding} level={level} />
     </>
   );
 }
 
 /* ------------------------------------------------------------------ Kaarten */
-function CardsView({ ids, reference }: { ids: number[]; reference: number | null }) {
+function CardsView({ ids, reference, level }: { ids: number[]; reference: number | null; level: string }) {
   const nav = useNavigate();
-  const { data, isLoading } = useQuery({ queryKey: ["cards", ids, reference], queryFn: () => api.get<any[]>("/compare/cards", { product_ids: ids.join(","), reference }) });
+  const { data, isLoading } = useQuery({ queryKey: ["cards", ids, reference, level], queryFn: () => api.get<any[]>("/compare/cards", { product_ids: ids.join(","), reference, level }) });
   const [sales, setSales] = React.useState<any>(null);
   if (isLoading) return <Loading />;
   return (
@@ -228,6 +247,8 @@ function CardsView({ ids, reference }: { ids: number[]; reference: number | null
             </div>
             <div className="mt-4 text-[17px] font-semibold tracking-tight">{p.name}</div>
             <div className="text-[13px] text-ink-muted">{p.provider_name}{p.id === reference && " · referentie"}</div>
+            {p.level_info?.offered === false && <Badge className="mt-2" tone="neutral">{COVERAGE[level]} niet aangeboden</Badge>}
+            {p.level_info?.local_name && <div className="mt-1 text-[12px] text-ink-muted">{COVERAGE[level]} heet hier “{p.level_info.local_name}”</div>}
             {p.highlights.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-1.5">{p.highlights.map((h: any) => <Badge key={h.feature} tone="neutral">{h.feature}</Badge>)}</div>
             )}
