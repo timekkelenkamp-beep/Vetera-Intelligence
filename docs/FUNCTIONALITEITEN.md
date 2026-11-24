@@ -105,6 +105,7 @@ De knop *Automatisch* weigert en logt dit zolang er geen toegestane, gebouwde co
 | Concurrentiekaart per aanbieder (prijsniveau, sterke/zwakke punten, tegenargumenten, gespreksvragen), afdrukbaar | Gereed | A, H |
 | Tijdlijn per aanbieder (documenten, wijzigingen, premies, bevindingen, status) met filters | Gereed | A, H |
 | Marktbericht: automatisch na elke broncontrole, ook als rapport (PDF/Excel) | Gereed | A |
+| Automatisch onderzoek per aanbieder: AI-webonderzoek beperkt tot het officiële domein, server haalt pagina's en PDF's op (robots.txt), premie-indicaties alleen als het bedrag letterlijk op de pagina staat, gebruiker kiest wat wordt geïmporteerd, daarna optioneel AI-analyse van alle nieuwe documenten | Gereed | A (gesimuleerde AI en website), X (echte websites) |
 | Snelzoeken (Ctrl+K / ⌘K) over aanbieders, producten, documenten, clausules en volledige tekst | Gereed | A |
 
 ---

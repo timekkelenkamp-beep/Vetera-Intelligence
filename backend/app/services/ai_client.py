@@ -110,6 +110,7 @@ def _check_budget(db: Session, est_cost: float) -> None:
 
 def run_structured(db: Session, *, kind: str, system: str, user_text: str, schema: dict,
                    sent_summary: dict, question: str | None = None, web_search: bool = False,
+                   web_domains: list[str] | None = None,
                    max_tokens: int = 16000, documents: list[dict] | None = None) -> tuple[dict, AIAnalysis]:
     """Voer een Claude-verzoek uit met gestructureerde JSON-uitvoer."""
     status = ai_status(db)
@@ -140,8 +141,11 @@ def run_structured(db: Session, *, kind: str, system: str, user_text: str, schem
         output_config=output_config,
     )
     if web_search:
-        kwargs["tools"] = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 8,
-                            "user_location": {"type": "approximate", "country": "NL"}}]
+        tool = {"type": "web_search_20260209", "name": "web_search", "max_uses": 8,
+                "user_location": {"type": "approximate", "country": "NL"}}
+        if web_domains:
+            tool["allowed_domains"] = web_domains[:20]
+        kwargs["tools"] = [tool]
     analysis = AIAnalysis(kind=kind, model=model, question=question, sent_summary=sent_summary)
     try:
         if model in FALLBACK_MODELS:

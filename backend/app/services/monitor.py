@@ -133,15 +133,18 @@ def pdf_links(html: str, base: str) -> list[dict]:
     return out
 
 
-def visible_text_hash(html: str) -> str:
+def visible_text(html: str) -> str:
     html = re.sub(r"<(script|style|noscript)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
     p = _LinkParser()
     try:
         p.feed(html)
     except Exception:
         pass
-    text = re.sub(r"\s+", " ", " ".join(p.text_parts)).strip()
-    return sha256_bytes(text.encode())
+    return re.sub(r"\s+", " ", " ".join(p.text_parts)).strip()
+
+
+def visible_text_hash(html: str) -> str:
+    return sha256_bytes(visible_text(html).encode())
 
 
 def notify(db: Session, type_: str, title: str, body: str | None = None, link: str | None = None,

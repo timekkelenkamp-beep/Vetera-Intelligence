@@ -91,3 +91,17 @@ def analyses(kind: str | None = None, limit: int = 100, db: Session = Depends(ge
 @router.get("/analyses/{aid}")
 def analysis(aid: int, db: Session = Depends(get_db)):
     return to_dict(get_or_404(db, AIAnalysis, aid, "Analyse"))
+
+
+@router.post("/research")
+def research(data: dict, db: Session = Depends(get_db)):
+    """Automatisch onderzoek: producten, documenten en premie-indicaties op de officiële website."""
+    from ..services import research as svc
+    return _run(svc.start, db, int(data.get("provider_id") or 0), bool(data.get("dry_run")))
+
+
+@router.post("/research/import")
+def research_import(data: dict, db: Session = Depends(get_db)):
+    from ..services import research as svc
+    return _run(svc.import_selected, db, int(data.get("provider_id") or 0), int(data.get("analysis_id") or 0),
+                [str(x) for x in (data.get("selection") or [])])

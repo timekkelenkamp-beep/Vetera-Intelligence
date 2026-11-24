@@ -1,13 +1,14 @@
 import * as React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Pencil, Plus, Upload, Globe, MoreHorizontal, Trash2, Merge, CheckCircle2, ImageOff, Wand2, Search, Package, FileText, ArrowUpRight, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Sparkles, ArrowLeft, Pencil, Plus, Upload, Globe, MoreHorizontal, Trash2, Merge, CheckCircle2, ImageOff, Wand2, Search, Package, FileText, ArrowUpRight, ThumbsUp, ThumbsDown } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { cn, date, eur, relative } from "@/lib/utils";
 import { DOC_TYPE, OBS_TYPE, PROVIDER_STATUS, PROVIDER_TYPE, SOURCE_TYPE, VEHICLE, ACCESS } from "@/lib/labels";
 import { ProviderLogo } from "@/components/common";
 import { Battlecard, Timeline } from "@/components/ProviderInsights";
+import { useAutoResearch } from "@/components/AutoResearch";
 import { ProductForm, ProviderForm, UploadDialog, useProviders } from "@/components/forms";
 import { Dialog, Menu, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Badge, Button, Card, CardHeader, EmptyState, Field, KeyValue, Loading, Notice, Select } from "@/components/ui/primitives";
@@ -23,6 +24,7 @@ export default function CompetitorDetail() {
   const [merge, setMerge] = React.useState(false);
   const { data: p, isLoading } = useQuery({ queryKey: ["provider", id], queryFn: () => api.get(`/providers/${id}`) });
   const premiums = useQuery({ queryKey: ["premiums", "provider", id], queryFn: () => api.get<any[]>("/premiums", { provider_id: id }), enabled: tab === "premies" });
+  const research = useAutoResearch(p || {});
   if (isLoading || !p) return <Loading />;
 
   const del = async () => {
@@ -67,6 +69,7 @@ export default function CompetitorDetail() {
               <Button variant="primary" icon={<ThumbsUp className="h-4 w-4" />} onClick={() => setStatus("actief")}>Goedkeuren</Button>
             </>
           )}
+          <Button variant={p.products.length ? "secondary" : "primary"} icon={<Sparkles className="h-4 w-4" />} onClick={research.start} loading={research.busy}>Automatisch onderzoeken</Button>
           <Button icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(true)}>Bewerken</Button>
           {!p.is_reference && (
             <Menu trigger={<Button size="icon" variant="ghost" aria-label="Meer"><MoreHorizontal className="h-4 w-4" /></Button>}
@@ -228,6 +231,7 @@ export default function CompetitorDetail() {
       <ProviderForm open={edit} onOpenChange={setEdit} initial={p} />
       <ProductForm open={!!prodForm} onOpenChange={(v) => !v && setProdForm(null)} initial={prodForm?.id ? prodForm : undefined} providerId={p.id} />
       <UploadDialog open={upload} onOpenChange={setUpload} providerId={p.id} />
+      {research.dialog}
       <MergeDialog open={merge} onOpenChange={setMerge} provider={p} />
     </div>
   );
