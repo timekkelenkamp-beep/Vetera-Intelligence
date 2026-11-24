@@ -20,9 +20,20 @@ import ProductDetail from "./pages/ProductDetail";
 import Advice from "./pages/Advice";
 import BattlecardPrint from "./pages/BattlecardPrint";
 import { CommandPalette } from "./components/CommandPalette";
+import Login from "./pages/Login";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "./lib/api";
+import { Loading } from "./components/ui/primitives";
 
 export default function App() {
   const loc = useLocation();
+  const qc = useQueryClient();
+  const auth = useQuery({ queryKey: ["auth"], queryFn: () => api.get("/auth/status"), staleTime: 60_000 });
+  React.useEffect(() => {
+    const on = () => auth.refetch();
+    window.addEventListener("vi:unauthorized", on);
+    return () => window.removeEventListener("vi:unauthorized", on);
+  }, []); // eslint-disable-line
   const [palette, setPalette] = React.useState(false);
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -31,6 +42,10 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  if (auth.isLoading) return <Loading />;
+  if (auth.data?.required && !auth.data?.authenticated) {
+    return <Login configured={auth.data.configured} onDone={() => { qc.clear(); auth.refetch(); }} />;
+  }
   const printView = (loc.pathname.startsWith("/rapportages/") && loc.pathname.endsWith("/print")) || /^\/concurrenten\/\d+\/kaart$/.test(loc.pathname);
   if (printView) {
     return (
@@ -42,7 +57,7 @@ export default function App() {
   }
   return (
     <div className="min-h-screen bg-white">
-      <Sidebar onSearch={() => setPalette(true)} />
+      <Sidebar onSearch={() => setPalette(true)} cloud={!!auth.data?.cloud} />
       <CommandPalette open={palette} onOpenChange={setPalette} />
       <main className="ml-[248px] min-h-screen">
         <AnimatePresence mode="wait">

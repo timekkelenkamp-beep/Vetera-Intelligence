@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     max_upload_mb: int = 50
     allow_remote_access: bool = False  # standaard alleen localhost
+    # Online gebruik (bijv. Render): wachtwoord verplicht zodra allow_remote_access aan staat.
+    app_password: str | None = None
+    session_secret: str | None = None
+    session_days: int = 30
+    auto_monitor: bool = False  # in de cloud: wekelijkse broncontrole door de server zelf
     user_agent: str = "VeteraIntelligence/1.0 (lokale broncontrole; respecteert robots.txt)"
 
     @property
@@ -51,6 +56,10 @@ class Settings(BaseSettings):
     @property
     def backups_dir(self) -> Path:
         return self.data_dir / "backups"
+
+    @property
+    def cloud(self) -> bool:
+        return self.allow_remote_access
 
     def resolved_api_key(self) -> str | None:
         return self.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY") or None

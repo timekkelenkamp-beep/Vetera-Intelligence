@@ -12,6 +12,12 @@ toegestaan internetonderzoek maken een externe verbinding.
 
 ---
 
+## Online gebruiken (zonder installatie)
+
+De app kan ook online draaien bij Render, beveiligd met een wachtwoord. Volg
+[`docs/ONLINE_ZETTEN.md`](docs/ONLINE_ZETTEN.md): account aanmaken, *New → Blueprint*, repository kiezen,
+wachtwoord invullen. Het `Dockerfile` en `render.yaml` staan klaar.
+
 ## Installatie (Windows)
 
 **Benodigd**
@@ -153,6 +159,9 @@ Zie `backend\.env.example`. Belangrijkste variabelen:
 | `VETERA_HOST` / `VETERA_PORT` | `127.0.0.1` / `3000` | Lokaal adres |
 | `VETERA_DATA_DIR` | `.\data` | Datamap (database, bestanden, back-ups) |
 | `VETERA_MAX_UPLOAD_MB` | `50` | Maximale uploadgrootte |
+| `VETERA_ALLOW_REMOTE_ACCESS` | `false` | Online modus: alles achter het wachtwoord |
+| `VETERA_APP_PASSWORD` / `VETERA_SESSION_SECRET` | – | Verplicht in online modus |
+| `VETERA_AUTO_MONITOR` | `false` | Server voert de wekelijkse broncontrole zelf uit |
 
 AI-model, effort, budgetten, privacy en webonderzoek stel je in via *Instellingen → AI*.
 

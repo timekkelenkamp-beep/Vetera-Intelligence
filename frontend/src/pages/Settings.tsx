@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, ShieldCheck, Download, UploadCloud, Trash2, Plus, Database, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { api, useCloud } from "@/lib/api";
 import { date, eur, num } from "@/lib/utils";
 import { Dialog, TabPanel, Tabs } from "@/components/ui/overlay";
 import { Badge, Button, Card, CardHeader, Field, Input, KeyValue, Loading, Notice, PageHeader, Select, Switch } from "@/components/ui/primitives";
@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const tab = params.get("tab") || "ai";
   const qc = useQueryClient();
   const { data: s } = useQuery({ queryKey: ["settings"], queryFn: () => api.get("/settings") });
+  const cloud = useCloud();
   const save = async (body: any) => {
     try {
       await api.patch("/settings", body);
@@ -23,7 +24,7 @@ export default function SettingsPage() {
   if (!s) return <Loading />;
   return (
     <div>
-      <PageHeader module="instellingen" title="Instellingen" subtitle="Alle gegevens staan lokaal op deze computer. Externe verbindingen worden alleen gemaakt voor functies die dat nodig hebben." />
+      <PageHeader module="instellingen" title="Instellingen" subtitle={cloud ? "De app draait online bij je hostingdienst, beveiligd met een wachtwoord. Externe verbindingen worden alleen gemaakt voor functies die dat nodig hebben." : "Alle gegevens staan lokaal op deze computer. Externe verbindingen worden alleen gemaakt voor functies die dat nodig hebben."} />
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })} tabs={[{ value: "ai", label: "AI" }, { value: "rubrieken", label: "Vergelijkingsrubrieken" }, { value: "monitor", label: "Monitor & premies" }, { value: "data", label: "Data & back-up" }, { value: "audit", label: "Audittrail" }, { value: "systeem", label: "Systeem" }]}>
         <TabPanel value="ai"><AiSettings s={s} save={save} /></TabPanel>
         <TabPanel value="rubrieken"><Features /></TabPanel>
@@ -33,7 +34,7 @@ export default function SettingsPage() {
         <TabPanel value="systeem">
           <Card className="p-6"><KeyValue items={[
             { label: "Datamap", value: <code className="text-[12px]">{s._paths.data_dir}</code> },
-            { label: "Server", value: `${s._host} (alleen lokaal bereikbaar)` },
+            { label: "Server", value: s._cloud ? "Online, beveiligd met wachtwoord" : `${s._host} (alleen lokaal bereikbaar)` },
             { label: "Database", value: "SQLite met Alembic-migraties" },
             { label: "API-documentatie", value: <a className="text-accent hover:underline" href="/api/docs" target="_blank" rel="noreferrer">/api/docs</a> },
           ]} /></Card>
@@ -45,6 +46,7 @@ export default function SettingsPage() {
 
 function AiSettings({ s, save }: { s: any; save: (b: any) => void }) {
   const ai = s._ai;
+  const cloud = useCloud();
   const usage = useQuery({ queryKey: ["ai-analyses"], queryFn: () => api.get<any[]>("/ai/analyses") });
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_420px]">
@@ -54,7 +56,7 @@ function AiSettings({ s, save }: { s: any; save: (b: any) => void }) {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface"><KeyRound className="h-5 w-5 text-ink-muted" /></div>
             <div className="flex-1">
               <div className="flex items-center gap-2 text-[15px] font-semibold">Anthropic API-sleutel {ai.configured ? <Badge tone="positive"><CheckCircle2 className="h-3 w-3" /> Ingesteld</Badge> : <Badge tone="neutral"><XCircle className="h-3 w-3" /> Niet ingesteld</Badge>}</div>
-              <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">De sleutel wordt om veiligheidsredenen nooit via de browser ingevoerd of opgeslagen. Zet hem in <code className="rounded bg-surface px-1">backend\.env</code> als <code className="rounded bg-surface px-1">ANTHROPIC_API_KEY=…</code> en herstart de app. Zonder sleutel werken alle basisfuncties.</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">De sleutel wordt om veiligheidsredenen nooit via de browser ingevoerd of opgeslagen. {cloud ? <>Zet hem bij je hostingdienst als omgevingsvariabele <code className="rounded bg-surface px-1">ANTHROPIC_API_KEY</code> (Render: Environment) en start de dienst opnieuw.</> : <>Zet hem in <code className="rounded bg-surface px-1">backend\.env</code> als <code className="rounded bg-surface px-1">ANTHROPIC_API_KEY=…</code> en herstart de app.</>} Zonder sleutel werken alle basisfuncties.</p>
             </div>
           </div>
         </Card>
@@ -71,7 +73,7 @@ function AiSettings({ s, save }: { s: any; save: (b: any) => void }) {
           <div className="flex items-center gap-2 text-[15px] font-semibold"><ShieldCheck className="h-4 w-4 text-accent" /> Privacy</div>
           <Switch checked={!!s.ai_allow_nonpublic} onCheckedChange={(v) => { if (v && !confirm("Niet-publieke documenten en premies kunnen dan — na een extra bevestiging per verzoek — naar de externe AI-dienst worden verstuurd. Doorgaan?")) return; save({ ai_allow_nonpublic: v }); }} label="Niet-publieke gegevens toestaan (per verzoek bevestigen)" description="Standaard uit. Interne documenten en niet-publieke Excel-data worden dan nooit naar AI gestuurd." />
           <Switch checked={!!s.ai_web_research} onCheckedChange={(v) => save({ ai_web_research: v })} label="Webonderzoek door AI toestaan" description="Voor concurrentieontdekking, marktontwikkelingen en verdiepend onderzoek. Er worden alleen openbare webbronnen geraadpleegd." />
-          <Notice tone="neutral">De app draait lokaal, maar AI-verzoeken gaan via internet naar Anthropic. Vóór elk verzoek zie je welke gegevens worden verstuurd en wat de geraamde kosten zijn.</Notice>
+          <Notice tone="neutral">{cloud ? "De app draait bij je hostingdienst; AI-verzoeken" : "De app draait lokaal, maar AI-verzoeken"} gaan via internet naar Anthropic. Vóór elk verzoek zie je welke gegevens worden verstuurd en wat de geraamde kosten zijn.</Notice>
         </Card>
       </div>
       <Card className="h-fit">
@@ -144,7 +146,7 @@ function MonitorSettings({ s, save }: { s: any; save: (b: any) => void }) {
         <div className="text-[15px] font-semibold">Broncontrole</div>
         <Field label="Interval (dagen)"><Input type="number" defaultValue={s.monitor_interval_days} onBlur={(e) => save({ monitor_interval_days: Number(e.target.value) })} /></Field>
         <Field label="Wachttijd tussen verzoeken naar dezelfde website (seconden)" hint="Voorkomt onnodige belasting van websites."><Input type="number" defaultValue={s.monitor_request_delay_s} onBlur={(e) => save({ monitor_request_delay_s: Number(e.target.value) })} /></Field>
-        <Notice tone="info" title="Wekelijkse Windows-taak">Voer eenmalig <code>scripts\schedule_weekly_check.bat</code> uit. De taak draait wanneer de computer aan staat; een gemiste controle wordt bij de volgende start van de app gemeld en kan worden ingehaald.</Notice>
+        {s._auto_monitor ? <Notice tone="info" title="Automatische controle">De server controleert elk uur of de broncontrole aan de beurt is en voert hem dan zelf uit.</Notice> : <Notice tone="info" title="Wekelijkse Windows-taak">Voer eenmalig <code>scripts\schedule_weekly_check.bat</code> uit. De taak draait wanneer de computer aan staat; een gemiste controle wordt bij de volgende start van de app gemeld en kan worden ingehaald.</Notice>}
       </Card>
       <Card className="space-y-4 p-6">
         <div className="text-[15px] font-semibold">Premies</div>

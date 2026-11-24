@@ -29,3 +29,8 @@ de backend op http://127.0.0.1:3000.
   bronvalidatie), monitor, logos, quality, reports.
 - `frontend/src/components/AiAction.tsx`: twee-staps AI (preview → bevestigen). Gebruik dit voor elke nieuwe AI-actie.
 - Kleuren grafieken: `frontend/src/lib/chart.ts` (gevalideerd palet; kleur volgt entiteit).
+
+## Online (Render)
+- `Dockerfile` + `render.yaml`; online modus = `VETERA_ALLOW_REMOTE_ACCESS=true`. Dan staat alles onder `/api`
+  (behalve `auth.PUBLIC_API`) achter de wachtwoordcookie (`app/auth.py`) en faalt de app dicht zonder wachtwoord.
+- `VETERA_AUTO_MONITOR=true` start een uurlijkse controle in `main.lifespan` (geen Windows-taak in de cloud).

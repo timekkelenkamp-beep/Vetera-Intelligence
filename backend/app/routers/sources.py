@@ -91,6 +91,8 @@ def monitor_status(db: Session = Depends(get_db)):
     st = schedule_status(db)
     running = db.scalars(select(MonitorRun).where(MonitorRun.status == "bezig")).first()
     st["running"] = to_dict(running) if running else None
+    from ..config import get_settings
+    st["auto"] = get_settings().auto_monitor
     return st
 
 

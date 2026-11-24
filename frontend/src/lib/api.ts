@@ -8,6 +8,7 @@ export class ApiError extends Error {
 }
 
 async function handle<T>(res: Response): Promise<T> {
+  if (res.status === 401 && !res.url.includes("/api/auth/")) window.dispatchEvent(new Event("vi:unauthorized"));
   if (!res.ok) {
     let msg = `Er ging iets mis (${res.status})`;
     try {
@@ -43,3 +44,10 @@ export const api = {
   upload: <T = any>(path: string, form: FormData) => fetch(`/api${path}`, { method: "POST", body: form }).then((r) => handle<T>(r)),
   url: (path: string, params?: Record<string, any>) => `/api${path}${qs(params)}`,
 };
+
+import { useQuery } from "@tanstack/react-query";
+/** true als de app online draait (met wachtwoord) in plaats van lokaal op deze computer. */
+export function useCloud() {
+  const q = useQuery({ queryKey: ["auth"], queryFn: () => api.get("/auth/status"), staleTime: 60_000 });
+  return !!q.data?.cloud;
+}

@@ -1,0 +1,28 @@
+# Render Blueprint voor Vetera Intelligence.
+# Render → New → Blueprint → kies deze repository. Daarna vul je VETERA_APP_PASSWORD
+# (en optioneel ANTHROPIC_API_KEY) in. Zie docs/ONLINE_ZETTEN.md.
+services:
+  - type: web
+    name: vetera-intelligence
+    runtime: docker
+    region: frankfurt
+    plan: starter
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: vetera-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: VETERA_APP_PASSWORD
+        sync: false
+      - key: VETERA_SESSION_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VETERA_DATA_DIR
+        value: /data
+      - key: VETERA_ALLOW_REMOTE_ACCESS
+        value: "true"
+      - key: VETERA_AUTO_MONITOR
+        value: "true"

@@ -98,6 +98,8 @@ def get_settings_(db: Session = Depends(get_db)):
     s["_ai"] = ai_status(db)
     s["_paths"] = {"data_dir": str(get_settings().data_dir)}
     s["_host"] = f"{get_settings().host}:{get_settings().port}"
+    s["_cloud"] = get_settings().cloud
+    s["_auto_monitor"] = get_settings().auto_monitor
     return s
 
 

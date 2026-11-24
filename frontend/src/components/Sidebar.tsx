@@ -1,12 +1,12 @@
 import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { Search } from "lucide-react";
+import { Search, LogOut } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { MODULES, NAV_ORDER, tileStyle } from "@/lib/modules";
 
-export function Sidebar({ onSearch }: { onSearch: () => void }) {
+export function Sidebar({ onSearch, cloud }: { onSearch: () => void; cloud?: boolean }) {
   const notes = useQuery({ queryKey: ["notif-count"], queryFn: () => api.get<any[]>("/notifications", { status: "nieuw" }), refetchInterval: 60_000 });
   const count = notes.data?.length || 0;
   const mac = typeof navigator !== "undefined" && /Mac/i.test(navigator.platform);
@@ -45,11 +45,18 @@ export function Sidebar({ onSearch }: { onSearch: () => void }) {
           );
         })}
       </nav>
-      <div className="px-5 py-4 text-[11px] leading-relaxed text-ink-faint">
-        Lokaal · 127.0.0.1
-        <br />
-        Gegevens blijven op deze computer
-      </div>
+      {cloud ? (
+        <div className="flex items-center justify-between px-5 py-4 text-[11px] leading-relaxed text-ink-faint">
+          <span>Online · beveiligd met wachtwoord</span>
+          <button onClick={async () => { await api.post("/auth/logout"); window.location.href = "/"; }} className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-muted hover:bg-black/[0.04] hover:text-ink" title="Uitloggen"><LogOut className="h-3.5 w-3.5" /> Uitloggen</button>
+        </div>
+      ) : (
+        <div className="px-5 py-4 text-[11px] leading-relaxed text-ink-faint">
+          Lokaal · 127.0.0.1
+          <br />
+          Gegevens blijven op deze computer
+        </div>
+      )}
     </aside>
   );
 }

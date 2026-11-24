@@ -37,7 +37,7 @@ export default function MarketMonitor() {
         <Stat label="Gemonitorde bronnen" value={s?.monitored_sources ?? "–"} hint={!s?.monitored_sources ? "Zet ‘monitoren’ aan in het bronregister" : undefined} />
         <Stat label="Laatste controle" value={<span className="text-[20px]">{s?.last_run_at ? relative(s.last_run_at) : "Nog niet"}</span>} />
         <Stat label="Volgende controle" value={<span className="text-[20px]">{s?.next_due_at ? date(s.next_due_at) : "–"}</span>} hint={`Elke ${s?.interval_days ?? 7} dagen`} />
-        <Stat label="Planning" value={<span className="text-[20px]">Windows-taak</span>} hint="Installeer met scripts\\schedule_weekly_check.bat" icon={<CalendarClock />} />
+        <Stat label="Planning" value={<span className="text-[20px]">{s?.auto ? "Automatisch" : "Windows-taak"}</span>} hint={s?.auto ? "De server controleert zelf" : "Installeer met scripts\\schedule_weekly_check.bat"} icon={<CalendarClock />} />
       </div>
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v })} tabs={[{ value: "bericht", label: "Marktbericht" }, { value: "meldingen", label: "Meldingen" }, { value: "wijzigingen", label: "Documentwijzigingen" }, { value: "controles", label: "Controles" }]}>
         <TabPanel value="bericht"><MarketBrief /></TabPanel>
@@ -171,7 +171,7 @@ function Runs() {
   return (
     <>
       <Card>
-        <CardHeader title="Uitgevoerde controles" subtitle="Gepland (Windows-taak), handmatig of inhaalcontrole" />
+        <CardHeader title="Uitgevoerde controles" subtitle="Gepland, handmatig of inhaalcontrole" />
         {!data?.length ? <EmptyState title="Nog geen controles" /> : (
           <ul className="divide-y divide-line">
             {data.map((r) => (
