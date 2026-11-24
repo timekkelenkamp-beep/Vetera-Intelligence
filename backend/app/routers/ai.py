@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -76,8 +76,12 @@ def diff_analysis(data: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/discover")
-def discover(data: dict, db: Session = Depends(get_db)):
-    return _run(ai_tasks.discover, db, bool(data.get("dry_run")))
+def discover(data: dict, background: BackgroundTasks, db: Session = Depends(get_db)):
+    res = _run(ai_tasks.discover, db, bool(data.get("dry_run")))
+    if res.get("added"):
+        from ..services.logos import auto_logo_background
+        background.add_task(auto_logo_background, res["added"])
+    return res
 
 
 @router.get("/analyses")
@@ -101,7 +105,9 @@ def research(data: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/research/import")
-def research_import(data: dict, db: Session = Depends(get_db)):
+def research_import(data: dict, background: BackgroundTasks, db: Session = Depends(get_db)):
     from ..services import research as svc
+    from ..services.logos import auto_logo_background
+    background.add_task(auto_logo_background, [int(data.get("provider_id") or 0)])
     return _run(svc.import_selected, db, int(data.get("provider_id") or 0), int(data.get("analysis_id") or 0),
                 [str(x) for x in (data.get("selection") or [])])

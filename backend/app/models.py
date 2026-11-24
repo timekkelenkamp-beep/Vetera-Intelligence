@@ -48,6 +48,7 @@ class Provider(TimestampMixin, Base):
     logo_path: Mapped[str | None] = mapped_column(String(500))
     logo_status: Mapped[str] = mapped_column(String(20), default="geen")  # geen|kandidaat|goedgekeurd
     logo_source_url: Mapped[str | None] = mapped_column(String(1000))
+    logo_auto: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # automatisch gekozen
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     products: Mapped[list[Product]] = relationship(back_populates="provider", foreign_keys="Product.provider_id", cascade="all, delete-orphan",

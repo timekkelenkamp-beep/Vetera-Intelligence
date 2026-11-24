@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -53,7 +53,7 @@ def list_providers(q: str | None = None, status: str | None = None, provider_typ
 
 
 @router.post("")
-def create_provider(data: dict, db: Session = Depends(get_db)):
+def create_provider(data: dict, background: BackgroundTasks, db: Session = Depends(get_db)):
     if not (data.get("name") or "").strip():
         raise HTTPException(422, "Naam is verplicht")
     if db.scalars(select(Provider).where(func.lower(Provider.name) == data["name"].strip().lower())).first():
@@ -64,7 +64,18 @@ def create_provider(data: dict, db: Session = Depends(get_db)):
     apply_updates(db, p, data, FIELDS, "provider", enums=ENUMS)
     audit(db, "provider", p.id, "aangemaakt", {"name": p.name})
     db.commit()
+    if p.website:
+        background.add_task(logos.auto_logo_background, [p.id])
     return _summary(db, p)
+
+
+@router.post("/logos/auto")
+def logos_auto(background: BackgroundTasks, db: Session = Depends(get_db)):
+    """Haal voor alle aanbieders met een website automatisch een logo op (op de achtergrond)."""
+    ids = [p.id for p in db.scalars(select(Provider).where(Provider.website.is_not(None), Provider.status != "samengevoegd"))
+           if p.logo_status != "goedgekeurd" or p.logo_auto]
+    background.add_task(logos.auto_logo_background, ids)
+    return {"started": len(ids)}
 
 
 @router.post("/startlijst")
@@ -98,12 +109,14 @@ def get_provider(provider_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/{provider_id}")
-def update_provider(provider_id: int, data: dict, db: Session = Depends(get_db)):
+def update_provider(provider_id: int, data: dict, background: BackgroundTasks, db: Session = Depends(get_db)):
     p = get_or_404(db, Provider, provider_id, "Aanbieder")
     if p.is_reference and data.get("status") not in (None, "actief"):
         raise HTTPException(422, "De Vetera-referentie blijft actief")
-    apply_updates(db, p, data, FIELDS, "provider", enums=ENUMS)
+    changes = apply_updates(db, p, data, FIELDS, "provider", enums=ENUMS)
     db.commit()
+    if "website" in changes and p.website and (p.logo_status != "goedgekeurd" or p.logo_auto):
+        background.add_task(logos.auto_logo_background, [p.id])
     return _summary(db, p)
 
 
@@ -155,7 +168,8 @@ def _mt(path: str) -> str:
 @router.get("/{provider_id}/logo/candidates")
 def logo_candidates(provider_id: int, db: Session = Depends(get_db)):
     get_or_404(db, Provider, provider_id, "Aanbieder")
-    return logos.list_candidates(provider_id)
+    p = db.get(Provider, provider_id)
+    return logos.list_candidates(provider_id, p.name)
 
 
 @router.get("/{provider_id}/logo/candidates/{name}")
@@ -186,7 +200,7 @@ async def logo_upload(provider_id: int, file: UploadFile = File(...), db: Sessio
     p = get_or_404(db, Provider, provider_id, "Aanbieder")
     data = await file.read()
     try:
-        c = logos.store_candidate(p.id, data, f"Handmatig geüpload: {file.filename}")
+        c = logos.store_candidate(p.id, data, f"Handmatig geüpload: {file.filename}", "upload")
     except FetchError as exc:
         raise HTTPException(422, str(exc)) from exc
     if p.logo_status == "geen":
@@ -196,7 +210,7 @@ async def logo_upload(provider_id: int, file: UploadFile = File(...), db: Sessio
 
 
 @router.post("/{provider_id}/logo/candidates/{name}/transparent")
-def logo_transparent(provider_id: int, name: str, tolerance: int = 18):
+def logo_transparent(provider_id: int, name: str, tolerance: int = 28):
     try:
         return logos.remove_background(provider_id, name, max(0, min(tolerance, 80)))
     except FetchError as exc:
@@ -210,11 +224,20 @@ def logo_approve(provider_id: int, name: str, db: Session = Depends(get_db)):
         p.logo_path = logos.approve(provider_id, name)
     except FetchError as exc:
         raise HTTPException(422, str(exc)) from exc
-    origin = (logos.candidate_dir(provider_id) / (Path(name).name + ".bron.txt"))
-    p.logo_source_url = origin.read_text(encoding="utf-8")[:1000] if origin.exists() else None
+    p.logo_source_url = (logos.describe(logos.candidate_dir(provider_id) / Path(name).name).get("origin") or "")[:1000] or None
     p.logo_status = "goedgekeurd"
+    p.logo_auto = False  # door de gebruiker gekozen: nooit automatisch vervangen
     audit(db, "provider", p.id, "logo_goedgekeurd", {"bestand": name})
     db.commit()
+    return _summary(db, p)
+
+
+@router.post("/{provider_id}/logo/auto")
+def logo_auto(provider_id: int, db: Session = Depends(get_db)):
+    p = get_or_404(db, Provider, provider_id, "Aanbieder")
+    res = logos.auto_logo(db, p, force=True)
+    if res["status"] != "gekozen":
+        raise HTTPException(422, res["reason"])
     return _summary(db, p)
 
 
@@ -223,6 +246,6 @@ def logo_remove(provider_id: int, db: Session = Depends(get_db)):
     p = get_or_404(db, Provider, provider_id, "Aanbieder")
     if p.logo_path and Path(p.logo_path).exists():
         Path(p.logo_path).unlink()
-    p.logo_path, p.logo_status = None, "geen"
+    p.logo_path, p.logo_status, p.logo_auto = None, "geen", False
     db.commit()
     return {"ok": True}

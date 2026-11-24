@@ -2,7 +2,7 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { Plus, Search, ListPlus, Sparkles, Building2, Globe } from "lucide-react";
+import { Image as ImageIcon, Plus, Search, ListPlus, Sparkles, Building2, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/utils";
@@ -31,6 +31,11 @@ export default function Competitors() {
     qc.invalidateQueries({ queryKey: ["providers"] });
     toast.success(r.added ? `${r.added} aanbieders toegevoegd met status ‘Te beoordelen’` : "De startlijst is al geladen");
   };
+  const fetchLogos = async () => {
+    const r = await api.post("/providers/logos/auto");
+    toast.success(r.started ? `Logo's worden opgehaald voor ${r.started} aanbieder(s). Dit duurt even.` : "Alle aanbieders met een website hebben al een logo.");
+    if (r.started) [4000, 10000, 20000].forEach((t) => setTimeout(() => qc.invalidateQueries({ queryKey: ["providers"] }), t));
+  };
   const toReview = data?.filter((p) => p.status === "te_beoordelen").length || 0;
 
   return (
@@ -41,6 +46,7 @@ export default function Competitors() {
         actions={
           <>
             <Button icon={<ListPlus className="h-4 w-4" />} onClick={loadStart}>Startlijst laden</Button>
+            <Button icon={<ImageIcon className="h-4 w-4" />} onClick={fetchLogos}>Logo's ophalen</Button>
             <Button icon={<Sparkles className="h-4 w-4" />} onClick={() => discover.start({})} loading={discover.busy}>Ontdekken met AI</Button>
             <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setForm(true)}>Nieuwe aanbieder</Button>
           </>

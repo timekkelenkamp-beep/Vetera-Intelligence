@@ -303,12 +303,13 @@ function LogoManager({ provider }: { provider: any }) {
             </div>
             <div>
               <div className="text-[14px] font-semibold">Huidig logo</div>
-              <div className="text-[12.5px] text-ink-muted">{provider.logo_status === "goedgekeurd" ? "Goedgekeurd en lokaal opgeslagen" : "Geen goedgekeurd logo — tekstweergave actief"}</div>
+              <div className="text-[12.5px] text-ink-muted">{provider.logo_status === "goedgekeurd" ? (provider.logo_auto ? "Automatisch gekozen van de officiële website — kies hieronder een ander als het niet klopt" : "Door jou gekozen; wordt niet automatisch vervangen") : "Geen logo — tekstweergave actief"}</div>
               {provider.logo_source_url && <div className="text-[11.5px] text-ink-faint truncate max-w-md">Bron: {provider.logo_source_url}</div>}
             </div>
           </div>
           <div className="flex gap-2">
-            <Button icon={<Search className="h-4 w-4" />} onClick={() => act(() => api.post(`/providers/${provider.id}/logo/discover`))} loading={busy} disabled={!provider.website}>Zoek op officiële website</Button>
+            <Button variant="primary" icon={<Wand2 className="h-4 w-4" />} onClick={() => act(() => api.post(`/providers/${provider.id}/logo/auto`), "Logo automatisch gekozen en achtergrond verwijderd")} loading={busy} disabled={!provider.website}>Automatisch kiezen</Button>
+            <Button icon={<Search className="h-4 w-4" />} onClick={() => act(() => api.post(`/providers/${provider.id}/logo/discover`))} loading={busy} disabled={!provider.website}>Kandidaten zoeken</Button>
             <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-[10px] bg-surface px-3.5 text-[13.5px] font-medium hover:bg-surface-sunken">
               <Upload className="h-4 w-4" /> Uploaden
               <input type="file" accept=".svg,.png,.jpg,.jpeg,.webp" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
@@ -327,7 +328,7 @@ function LogoManager({ provider }: { provider: any }) {
         <Card><EmptyState title="Geen kandidaten" description={provider.website ? "Zoek op de officiële website of upload een logo." : "Vul eerst de officiële website in, of upload een logo."} /></Card>
       ) : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-          {cands.data.map((c) => (
+          {cands.data.map((c: any) => (
             <Card key={c.name} className="overflow-hidden">
               <div className={cn("flex h-32 items-center justify-center p-4", bgClass)}>
                 <img src={api.url(`/providers/${provider.id}/logo/candidates/${c.name}`)} alt="" className="max-h-full max-w-full object-contain" />
@@ -337,6 +338,7 @@ function LogoManager({ provider }: { provider: any }) {
                   <Badge>{c.ext.replace(".", "").toUpperCase()}</Badge>
                   {c.width && <Badge>{c.width}×{c.height}</Badge>}
                   <Badge tone={c.transparent ? "positive" : "caution"}>{c.transparent ? "Transparant" : "Achtergrond"}</Badge>
+                  {cands.data?.[0]?.name === c.name && <Badge tone="accent">Beste keuze</Badge>}
                 </div>
                 <div className="mt-1.5 truncate text-[11px] text-ink-faint" title={c.origin}>{c.origin}</div>
                 <div className="mt-2 flex gap-1.5">
