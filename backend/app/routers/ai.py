@@ -99,15 +99,65 @@ def analysis(aid: int, db: Session = Depends(get_db)):
 
 @router.post("/research")
 def research(data: dict, db: Session = Depends(get_db)):
-    """Automatisch onderzoek: producten, documenten en premie-indicaties op de officiële website."""
+    """Automatisch onderzoek van de officiële website. Preview direct; uitvoering als achtergrondtaak."""
     from ..services import research as svc
-    return _run(svc.start, db, int(data.get("provider_id") or 0), bool(data.get("dry_run")))
+    from ..services.jobs import start_job
+    pid = int(data.get("provider_id") or 0)
+    if data.get("dry_run"):
+        return _run(svc.start, db, pid, True)
+    _check_ai(db, web=True)
+
+    def job(db2, progress):
+        return svc.start(db2, pid, False, progress)
+    return {"job_id": start_job("productonderzoek", job)}
 
 
 @router.post("/research/import")
-def research_import(data: dict, background: BackgroundTasks, db: Session = Depends(get_db)):
+def research_import(data: dict, db: Session = Depends(get_db)):
     from ..services import research as svc
-    from ..services.logos import auto_logo_background
-    background.add_task(auto_logo_background, [int(data.get("provider_id") or 0)])
-    return _run(svc.import_selected, db, int(data.get("provider_id") or 0), int(data.get("analysis_id") or 0),
-                [str(x) for x in (data.get("selection") or [])])
+    from ..services.jobs import start_job
+    from ..services.logos import auto_logo
+    from ..models import Provider
+    pid, aid = int(data.get("provider_id") or 0), int(data.get("analysis_id") or 0)
+    sel = [str(x) for x in (data.get("selection") or [])]
+
+    def job(db2, progress):
+        res = svc.import_selected(db2, pid, aid, sel, progress)
+        p = db2.get(Provider, pid)
+        if p:
+            progress("Logo ophalen…")
+            auto_logo(db2, p)
+        return res
+    return {"job_id": start_job("import", job)}
+
+
+@router.post("/add-by-name")
+def add_by_name(data: dict, db: Session = Depends(get_db)):
+    """Naam invullen → opzoeken → website doorzoeken → importeren → optioneel analyseren."""
+    from ..services import research as svc
+    from ..services.jobs import start_job
+    name = (data.get("name") or "").strip()
+    if len(name) < 2:
+        raise HTTPException(422, "Vul een naam in")
+    if data.get("dry_run"):
+        return svc.find_provider_preview(db, name)
+    _check_ai(db, web=True)
+    analyze = bool(data.get("analyze", True))
+    return {"job_id": start_job("opzoeken", lambda db2, progress: svc.add_by_name(db2, progress, name, analyze))}
+
+
+def _check_ai(db: Session, web: bool = False):
+    st = ai_status(db)
+    if not st["configured"]:
+        raise HTTPException(503, st["message"])
+    if not st["enabled"]:
+        raise HTTPException(503, "AI-functies zijn uitgeschakeld in Instellingen.")
+    if web and not st["web_research"]:
+        raise HTTPException(403, "Webonderzoek door AI is niet geactiveerd (Instellingen → AI).")
+
+
+@router.get("/jobs/{job_id}")
+def job_status(job_id: int, db: Session = Depends(get_db)):
+    from ..models import Job
+    j = get_or_404(db, Job, job_id, "Taak")
+    return to_dict(j)

@@ -55,9 +55,9 @@ export function useAiAction<T = any>(endpoint: string, opts?: { onDone?: (r: T) 
 
 const KIND_LABEL: Record<string, string> = {
   vraag: "Onderzoeksvraag", extractie: "Voorwaardenanalyse van document", verkoop: "Verkoopargumenten", radar: "Verbeterradar",
-  dossier: "Verdiepend onderzoek", productonderzoek: "Automatisch onderzoek van de officiële website", wijziging: "Analyse van documentwijzigingen", ontdekking: "Concurrentieontdekking (webonderzoek)",
+  dossier: "Verdiepend onderzoek", productonderzoek: "Automatisch onderzoek van de officiële website", opzoeken: "Aanbieder opzoeken op internet", wijziging: "Analyse van documentwijzigingen", ontdekking: "Concurrentieontdekking (webonderzoek)",
 };
-const ITEM_LABEL: Record<string, string> = { finding: "bevindingen", premium: "premiewaarnemingen", page: "documentpagina's", text: "overzichten", document_pages: "documentpagina's", wijzigingen: "wijzigingen", bekende_aanbieders: "bekende aanbieders", aanbieder: "aanbieder" };
+const ITEM_LABEL: Record<string, string> = { finding: "bevindingen", premium: "premiewaarnemingen", page: "documentpagina's", text: "overzichten", document_pages: "documentpagina's", wijzigingen: "wijzigingen", bekende_aanbieders: "bekende aanbieders", aanbieder: "aanbieder", naam: "naam" };
 
 export function AiPreviewDialog({ preview, onClose, onConfirm, busy }: { preview: any; onClose: () => void; onConfirm: () => void; busy: boolean }) {
   if (!preview) return null;

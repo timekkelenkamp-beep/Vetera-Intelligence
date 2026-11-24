@@ -520,3 +520,18 @@ class QualityResolution(Base):
     resolution: Mapped[str] = mapped_column(String(30))  # geaccepteerd|gecorrigeerd
     note: Mapped[str | None] = mapped_column(Text)
     at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+
+class Job(Base):
+    """Achtergrondtaak (bijv. automatisch onderzoek), zodat lange acties geen time-out geven."""
+    __tablename__ = "jobs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    status: Mapped[str] = mapped_column(String(20), default="wachtrij")  # wachtrij|bezig|klaar|fout
+    step: Mapped[str | None] = mapped_column(String(300))
+    done: Mapped[int] = mapped_column(Integer, default=0)
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    result: Mapped[dict | None] = mapped_column(JSON)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)

@@ -54,6 +54,8 @@ async def lifespan(_app: FastAPI):
     upgrade_database()
     from .routers.system import fix_paths
     fix_paths()
+    from .services.jobs import mark_interrupted
+    mark_interrupted()
     if s.cloud and not auth.configured():
         log.error("Online modus zonder VETERA_APP_PASSWORD/VETERA_SESSION_SECRET: alle toegang wordt geweigerd.")
     task = asyncio.create_task(_monitor_loop()) if s.auto_monitor else None

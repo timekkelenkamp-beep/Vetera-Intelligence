@@ -6,13 +6,20 @@ import { api } from "@/lib/api";
 import { cn, eur } from "@/lib/utils";
 import { DOC_TYPE, PERIOD, VEHICLE } from "@/lib/labels";
 import { useAiAction } from "./AiAction";
+import { JobProgress, useJob } from "./Job";
 import { Dialog } from "./ui/overlay";
 import { Badge, Button, Notice } from "./ui/primitives";
 
 /** Automatisch onderzoek van één aanbieder: zoeken → kiezen → importeren → optioneel analyseren met AI. */
 export function useAutoResearch(provider: any) {
   const [result, setResult] = React.useState<any>(null);
-  const action = useAiAction("/ai/research", { onDone: (r: any) => setResult(r) });
+  const [jobId, setJobId] = React.useState<number | null>(null);
+  const job = useJob(jobId, (j) => {
+    setJobId(null);
+    if (j.status === "klaar") setResult(j.result);
+    else toast.error(j.error || "Automatisch onderzoek mislukt");
+  });
+  const action = useAiAction("/ai/research", { onDone: (r: any) => setJobId(r.job_id) });
   const start = () => {
     if (!provider.website) return toast.error("Vul eerst de officiële website van deze aanbieder in (Bewerken).");
     action.start({ provider_id: provider.id });
@@ -20,6 +27,11 @@ export function useAutoResearch(provider: any) {
   const dialog = (
     <>
       {action.dialog}
+      {jobId && (
+        <Dialog open onOpenChange={(v) => !v && setJobId(null)} title={`Automatisch onderzoek · ${provider.name}`}>
+          <JobProgress job={job} title="Officiële website wordt onderzocht" />
+        </Dialog>
+      )}
       {result && <ResearchDialog provider={provider} result={result} onClose={() => setResult(null)} />}
     </>
   );
@@ -32,17 +44,25 @@ function ResearchDialog({ provider, result, onClose }: { provider: any; result: 
   const [sel, setSel] = React.useState<Set<string>>(new Set(all.filter((x) => x.selected).map((x) => x.id)));
   const [busy, setBusy] = React.useState(false);
   const [imported, setImported] = React.useState<any>(null);
+  const [importJob, setImportJob] = React.useState<number | null>(null);
+  const ij = useJob(importJob, (j) => {
+    setImportJob(null);
+    setBusy(false);
+    if (j.status === "klaar") { setImported(j.result); refresh(); }
+    else toast.error(j.error || "Importeren mislukt");
+  });
   const [batch, setBatch] = React.useState<{ estimate?: number; done: number; total: number; running: boolean; results: any[] } | null>(null);
   const toggle = (id: string) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const refresh = () => ["provider", "providers", "products", "documents", "premiums", "calculators", "sources", "dashboard", "matrix", "findings", "timeline", "battlecard"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  function refresh() {
+    ["provider", "providers", "products", "documents", "premiums", "calculators", "sources", "dashboard", "matrix", "findings", "timeline", "battlecard"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  }
 
   const doImport = async () => {
     setBusy(true);
     try {
       const r = await api.post("/ai/research/import", { provider_id: provider.id, analysis_id: result.analysis_id, selection: [...sel] });
-      setImported(r);
-      refresh();
-    } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
+      setImportJob(r.job_id);
+    } catch (e: any) { toast.error(e.message); setBusy(false); }
   };
   const prepareBatch = async () => {
     setBusy(true);
@@ -94,7 +114,7 @@ function ResearchDialog({ provider, result, onClose }: { provider: any; result: 
           <><Button variant="ghost" onClick={onClose}>Annuleren</Button><Button variant="primary" onClick={doImport} loading={busy} disabled={sel.size === 0}>Importeren ({sel.size})</Button></>
         )
       }>
-      {!imported ? (
+      {importJob ? <JobProgress job={ij} title="Documenten ophalen en verwerken" /> : !imported ? (
         nothing ? <Notice tone="neutral">Er is niets gevonden op de website. Voeg producten en documenten handmatig toe.</Notice> : (
           <div className="space-y-5">
             {result.products.length > 0 && <Group title="Producten">{result.products.map((p: any) => <Row key={p.id} item={p} icon={<Package />} title={p.name} sub={`${VEHICLE[p.vehicle_category]}${p.page_url ? ` · ${p.page_url}` : ""}`} warn={p.existing_product_id ? "Bestaat al; documenten worden aan het bestaande product gekoppeld" : undefined} />)}</Group>}

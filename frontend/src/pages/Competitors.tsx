@@ -10,6 +10,7 @@ import { PROVIDER_STATUS, PROVIDER_TYPE } from "@/lib/labels";
 import { useAiAction } from "@/components/AiAction";
 import { ProviderLogo, useDebounced } from "@/components/common";
 import { ProviderForm } from "@/components/forms";
+import { AddByNameDialog } from "@/components/AddByName";
 import { Badge, Button, Card, EmptyState, Input, Loading, PageHeader, Select } from "@/components/ui/primitives";
 
 export default function Competitors() {
@@ -20,6 +21,7 @@ export default function Competitors() {
   const [type, setType] = React.useState("");
   const [sort, setSort] = React.useState("name");
   const [form, setForm] = React.useState(false);
+  const [byName, setByName] = React.useState(false);
   const dq = useDebounced(q);
   const { data, isLoading } = useQuery({ queryKey: ["providers", dq, status, type, sort], queryFn: () => api.get<any[]>("/providers", { q: dq, status, provider_type: type, sort }) });
   const discover = useAiAction("/ai/discover", {
@@ -48,7 +50,8 @@ export default function Competitors() {
             <Button icon={<ListPlus className="h-4 w-4" />} onClick={loadStart}>Startlijst laden</Button>
             <Button icon={<ImageIcon className="h-4 w-4" />} onClick={fetchLogos}>Logo's ophalen</Button>
             <Button icon={<Sparkles className="h-4 w-4" />} onClick={() => discover.start({})} loading={discover.busy}>Ontdekken met AI</Button>
-            <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setForm(true)}>Nieuwe aanbieder</Button>
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setForm(true)}>Handmatig toevoegen</Button>
+            <Button variant="primary" icon={<Search className="h-4 w-4" />} onClick={() => setByName(true)}>Opzoeken op naam</Button>
           </>
         }
       />
@@ -107,6 +110,7 @@ export default function Competitors() {
       )}
       <ProviderForm open={form} onOpenChange={setForm} onSaved={(p) => nav(`/concurrenten/${p.id}`)} />
       {discover.dialog}
+      <AddByNameDialog open={byName} onOpenChange={setByName} />
     </div>
   );
 }

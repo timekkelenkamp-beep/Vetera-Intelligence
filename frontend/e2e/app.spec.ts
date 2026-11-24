@@ -15,7 +15,7 @@ test("dashboard toont lege installatie met onboarding en zonder AI-sleutel", asy
 
 test("concurrent en product toevoegen via de interface", async ({ page }) => {
   await page.goto("/concurrenten");
-  await page.getByRole("button", { name: "Nieuwe aanbieder" }).click();
+  await page.getByRole("button", { name: "Handmatig toevoegen" }).click();
   await page.getByLabel("Naam").fill("E2E Testverzekeraar");
   await page.getByRole("button", { name: "Opslaan" }).click();
   await expect(page.getByRole("heading", { name: "E2E Testverzekeraar" })).toBeVisible();
@@ -84,4 +84,13 @@ test("positionering, wat-als en marktbericht tonen lege toestanden zonder fouten
   await page.goto("/marktmonitor");
   await expect(page.getByText("Eerdere marktberichten")).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("opzoeken op naam vraagt eerst om bevestiging en werkt niet zonder AI-sleutel", async ({ page }) => {
+  await page.goto("/concurrenten");
+  await page.getByRole("button", { name: "Opzoeken op naam" }).click();
+  await page.getByLabel("Naam van de aanbieder").fill("Testnaam Verzekeringen");
+  await page.getByRole("button", { name: "Opzoeken", exact: true }).click();
+  await expect(page.getByText("Wat wordt verstuurd")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Versturen en analyseren" })).toBeDisabled();
 });

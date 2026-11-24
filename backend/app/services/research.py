@@ -12,6 +12,7 @@ Premiecalculators worden nooit automatisch ingevuld; ze komen in het toestemming
 """
 from __future__ import annotations
 
+import gc
 import re
 import time
 from urllib.parse import urlparse
@@ -94,7 +95,8 @@ Harde regels:
 - Laat velden leeg ('') of lijsten leeg als je iets niet hebt gevonden."""
 
 
-def start(db: Session, provider_id: int, dry_run: bool) -> dict:
+def start(db: Session, provider_id: int, dry_run: bool, progress=None) -> dict:
+    progress = progress or (lambda *a, **k: None)
     prov = db.get(Provider, provider_id)
     if not prov:
         raise ValueError("Aanbieder niet gevonden.")
@@ -107,9 +109,11 @@ def start(db: Session, provider_id: int, dry_run: bool) -> dict:
     summary = {"items": {"aanbieder": 1}, "domein": domain}
     if dry_run:
         return {"preview": build_preview(db, "productonderzoek", SYSTEM, user, summary, 4000, True)}
+    progress("Officiële website doorzoeken met AI…")
     data, analysis = run_structured(db, kind="productonderzoek", system=SYSTEM, user_text=user, schema=RESEARCH_SCHEMA,
                                     sent_summary=summary, question=f"Productonderzoek {prov.name}", web_search=True,
                                     web_domains=[domain])
+    progress("Gevonden pagina's controleren en PDF-links verzamelen…")
     candidates = enrich(db, prov, domain, data)
     analysis.validation = {"candidates": candidates, "provider_id": prov.id}
     db.commit()
@@ -191,7 +195,8 @@ def enrich(db: Session, prov: Provider, domain: str, data: dict) -> dict:
             "skipped": skipped}
 
 
-def import_selected(db: Session, provider_id: int, analysis_id: int, selection: list[str]) -> dict:
+def import_selected(db: Session, provider_id: int, analysis_id: int, selection: list[str], progress=None) -> dict:
+    progress = progress or (lambda *a, **k: None)
     """Importeer de gekozen kandidaten. Alleen kandidaten uit de opgeslagen onderzoeksrun worden gebruikt."""
     prov = db.get(Provider, provider_id)
     a = db.get(AIAnalysis, analysis_id)
@@ -226,11 +231,11 @@ def import_selected(db: Session, provider_id: int, analysis_id: int, selection: 
     db.commit()
 
     delay = float(get_setting(db, "monitor_request_delay_s", 3) or 0)
+    docs = [d for d in c["documents"] if d["id"] in sel]
     with make_client() as client:
         robots = _Robots(client, get_settings().user_agent)
-        for d in c["documents"]:
-            if d["id"] not in sel:
-                continue
+        for n, d in enumerate(docs, 1):
+            progress(f"Document {n} van {len(docs)} ophalen: {d['title'][:80]}", n - 1, len(docs))
             pid = product_ids.get(d.get("product"))
             try:
                 validate_external_url(d["url"])
@@ -267,6 +272,9 @@ def import_selected(db: Session, provider_id: int, analysis_id: int, selection: 
             except Exception as exc:  # noqa: BLE001
                 db.rollback()
                 errors.append(f"{d['title']}: ophalen mislukt ({type(exc).__name__})")
+            finally:
+                gc.collect()
+        progress("Documenten verwerkt", len(docs), len(docs))
 
     for p in c["premiums"]:
         if p["id"] not in sel or not p.get("verified") or p.get("amount") is None:
@@ -301,3 +309,96 @@ def import_selected(db: Session, provider_id: int, analysis_id: int, selection: 
     audit(db, "provider", prov.id, "automatisch_onderzoek", created, "ai")
     db.commit()
     return {"created": created, "errors": errors, "new_versions": new_versions}
+
+
+# ---------------------------------------------------------------- volledige verwerking
+def analyze_versions(db: Session, versions: list[dict], progress) -> list[dict]:
+    from .ai_tasks import extract_document
+    out = []
+    for n, v in enumerate(versions, 1):
+        progress(f"Polisvoorwaarden analyseren met AI ({n} van {len(versions)}): {v['title'][:70]}", n - 1, len(versions))
+        try:
+            r = extract_document(db, v["version_id"], v["product_id"], False)
+            out.append({"title": v["title"], "ok": True, "created": r["created"], "unverified": r["unverified_quotes"],
+                        "cost_eur": r["cost_eur"]})
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            out.append({"title": v["title"], "ok": False, "error": str(exc)[:300]})
+        gc.collect()
+    return out
+
+
+def full_research(db: Session, progress, provider_id: int, analyze: bool) -> dict:
+    """Zoeken → standaard geselecteerde kandidaten importeren → logo → optioneel AI-analyse."""
+    res = start(db, provider_id, False, progress)
+    selection = [x["id"] for k in ("products", "documents", "premiums", "calculators") for x in res[k] if x.get("selected")]
+    imp = import_selected(db, provider_id, res["analysis_id"], selection, progress)
+    progress("Logo ophalen…")
+    from .logos import auto_logo
+    prov = db.get(Provider, provider_id)
+    logo = auto_logo(db, prov)
+    analysis = analyze_versions(db, imp["new_versions"], progress) if analyze and imp["new_versions"] else []
+    return {"provider_id": provider_id, "found": {k: len(res[k]) for k in ("products", "documents", "premiums", "calculators")},
+            "created": imp["created"], "errors": imp["errors"] + res.get("skipped", [])[:5],
+            "logo": logo.get("status"), "analysis": analysis}
+
+
+FIND_SCHEMA = obj({
+    "found": {"type": "boolean"},
+    "name": STR, "website": STR,
+    "provider_type": {"type": "string", "enum": ["verzekeraar", "gevolmachtigde", "tussenpersoon", "distributeur", "onbekend"]},
+    "description": STR,
+    "offers_classic_vehicle_insurance": {"type": "boolean"},
+    "risk_carrier": STR, "evidence_url": STR, "notes": STR,
+})
+FIND_SYSTEM = """Zoek op internet naar de Nederlandse aanbieder met de opgegeven naam (verzekeraar, gevolmachtigde,
+tussenpersoon of distributeur). Bepaal de officiële website (alleen het eigen domein, geen vergelijkingssite),
+het type aanbieder, een korte zakelijke omschrijving en of de partij verzekeringen voor klassieke auto's,
+klassieke motorfietsen of klassieke bromfietsen aanbiedt. Verzin niets: als je de partij of de officiële website
+niet met zekerheid vindt, zet found op false en leg uit waarom in notes."""
+
+
+def find_provider_preview(db: Session, name: str) -> dict:
+    return {"preview": build_preview(db, "opzoeken", FIND_SYSTEM, f"Naam: {name}",
+                                     {"items": {"aanbieder": 1}, "naam": name}, 2000, True),
+            "note": "Daarna wordt de officiële website doorzocht (ongeveer dezelfde kosten) en worden PDF's opgehaald. "
+                    "AI-analyse van polisvoorwaarden kost per document ongeveer € 0,05 – € 0,50."}
+
+
+def add_by_name(db: Session, progress, name: str, analyze: bool) -> dict:
+    name = name.strip()
+    if len(name) < 2:
+        raise ValueError("Vul een naam in.")
+    existing = next((p for p in db.scalars(select(Provider)) if normalize_text(p.name) == normalize_text(name)), None)
+    if existing and existing.website:
+        prov = existing
+        progress(f"{prov.name} bestaat al; website bekend.")
+    else:
+        progress(f"{name} opzoeken op internet…")
+        data, _ = run_structured(db, kind="opzoeken", system=FIND_SYSTEM, user_text=f"Naam: {name}", schema=FIND_SCHEMA,
+                                 sent_summary={"naam": name}, question=f"Opzoeken: {name}", web_search=True, max_tokens=4000)
+        site = (data.get("website") or "").strip()
+        if not data.get("found") or not site:
+            raise ValueError(f"‘{name}’ niet met zekerheid gevonden. {data.get('notes') or ''}".strip())
+        if not site.startswith("http"):
+            site = "https://" + site
+        note = (f"Opgezocht met AI op {time.strftime('%d-%m-%Y')}. Bron: {data.get('evidence_url') or site}. "
+                f"Biedt klassieke voertuigverzekeringen: {'ja' if data.get('offers_classic_vehicle_insurance') else 'niet vastgesteld'}."
+                + (f" Risicodrager: {data['risk_carrier']}." if data.get("risk_carrier") else "") + " Controleer.")
+        if existing:
+            prov = existing
+            prov.website = site
+            prov.verification_note = note
+        else:
+            prov = Provider(name=(data.get("name") or name)[:200], website=site, provider_type=data.get("provider_type") or "onbekend",
+                            description=data.get("description") or None, status="actief", origin="ontdekt",
+                            verification_note=note)
+            db.add(prov)
+        db.flush()
+        audit(db, "provider", prov.id, "opgezocht", {"naam": name, "website": site}, "ai")
+        db.commit()
+        if not data.get("offers_classic_vehicle_insurance"):
+            progress("Let op: niet vastgesteld dat deze partij klassieke voertuigen verzekert; website wordt toch doorzocht.")
+    result = full_research(db, progress, prov.id, analyze)
+    result["provider_name"] = prov.name
+    return result
